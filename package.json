@@ -1,0 +1,19 @@
+{
+  "name": "crcasa-papeleria",
+  "version": "0.1.0",
+  "description": "Tienda en línea de artículos escolares y de oficina - Equipo CRCASA (Programación Web AEB-1055)",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "node --watch src/app.js",
+    "crear-admin": "node scripts/crear-admin.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.11.0"
+  }
+}

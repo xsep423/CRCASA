@@ -1,0 +1,10 @@
+:root { --crcasa: #1f4e79; }
+body { background: #f5f7fa; }
+.navbar { background: var(--crcasa); }
+.card-producto img { height: 160px; object-fit: contain; background: #fff; }
+.card-producto .placeholder-img {
+  height: 160px; display: flex; align-items: center; justify-content: center;
+  background: #e9eef4; color: #6c7a89; font-size: 2.5rem;
+}
+.precio { color: var(--crcasa); font-weight: 700; font-size: 1.15rem; }
+.form-box { max-width: 460px; }
