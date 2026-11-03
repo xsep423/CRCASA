@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRCASA | Productos</title>
+  <link href="/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/vendor/icons/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/estilos.css" rel="stylesheet">
+</head>
+<body>
+  <div id="nav"></div>
+  <main class="container py-4">
+    <h1 class="h4 mb-3">Productos</h1>
+    <p class="text-muted">Los productos en rojo están en o debajo de su existencia mínima.</p>
+    <div id="catalogo"></div>
+  </main>
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    requerirSesion();
+    // Productos: el capturista consulta; el administrador da de alta y edita.
+    // La existencia solo cambia con ventas (resta) y compras a proveedores (suma).
+    (async () => {
+      const [clasif, provs] = await Promise.all([
+        API.get('/clasificaciones'),
+        ES_ADMIN() ? API.get('/proveedores') : Promise.resolve([]),
+      ]);
+      Catalogo({
+        contenedor: '#catalogo', endpoint: '/productos', id: 'id_producto', nombre: 'producto', textoNuevo: 'Nuevo producto',
+        placeholder: 'Código o nombre', puedeCrear: ES_ADMIN(),
+        columnas: [
+          { campo: 'codigo', titulo: 'Código', formato: (v) => `<code>${esc(v)}</code>` },
+          { campo: 'nombre', titulo: 'Producto' },
+          { campo: 'clasificacion', titulo: 'Clasificación' },
+          { campo: 'precio_venta', titulo: 'Precio', clase: 'money', formato: dinero },
+          { campo: 'existencia', titulo: 'Existencia', clase: 'text-end',
+            formato: (v, f) => v <= f.existencia_minima ? `<span class="badge text-bg-danger" title="En o debajo del mínimo (${f.existencia_minima})">${v}</span>` : v },
+        ],
+        campos: [
+          { campo: 'codigo', etiqueta: 'Código', requerido: true, col: 4 },
+          { campo: 'nombre', etiqueta: 'Nombre', requerido: true, col: 8 },
+          { campo: 'descripcion', etiqueta: 'Descripción', col: 12 },
+          { campo: 'precio_venta', etiqueta: 'Precio de venta', tipo: 'number', paso: '0.01', min: 0, requerido: true, col: 4 },
+          { campo: 'costo', etiqueta: 'Costo', tipo: 'number', paso: '0.01', min: 0, col: 4, porDefecto: 0, ayuda: 'Se actualiza con cada compra' },
+          { campo: 'existencia_minima', etiqueta: 'Existencia mínima', tipo: 'number', min: 0, col: 4, porDefecto: 0 },
+          { campo: 'existencia', etiqueta: 'Existencia inicial', tipo: 'number', min: 0, col: 4, porDefecto: 0, ocultarAlEditar: true,
+            ayuda: 'Después cambia solo con ventas y compras' },
+          { campo: 'id_clasificacion', etiqueta: 'Clasificación', tipo: 'select', requerido: true, col: 4,
+            opciones: clasif.map((c) => [c.id_clasificacion, c.nombre]) },
+          { campo: 'id_proveedor', etiqueta: 'Proveedor principal', tipo: 'select', col: 4,
+            opciones: provs.map((p) => [p.id_proveedor, p.nombre]) },
+        ],
+        puedeEditar: () => ES_ADMIN(),
+        puedeEliminar: () => ES_ADMIN(),
+      });
+    })().catch(avisarError);
+  </script>
+</body>
+</html>

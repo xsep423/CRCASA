@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRCASA | Clientes</title>
+  <link href="/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/vendor/icons/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/estilos.css" rel="stylesheet">
+</head>
+<body>
+  <div id="nav"></div>
+  <main class="container py-4">
+    <h1 class="h4 mb-3">Clientes</h1>
+    <div id="catalogo"></div>
+  </main>
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    requerirSesion();
+    // CLIENTES = a quienes vendemos. No usan el sistema.
+    // El porcentaje de descuento (fidelidad) solo lo asigna el administrador.
+    Catalogo({
+      contenedor: '#catalogo', endpoint: '/clientes', id: 'id_cliente', nombre: 'cliente', textoNuevo: 'Nuevo cliente',
+      placeholder: 'Código, nombre o teléfono',
+      columnas: [
+        { campo: 'codigo', titulo: 'Código', formato: (v) => `<code>${esc(v)}</code>` },
+        { campo: 'nombre', titulo: 'Nombre / razón social' },
+        { campo: 'telefono', titulo: 'Teléfono' },
+        { campo: 'rfc', titulo: 'RFC' },
+        { campo: 'porcentaje_descuento', titulo: 'Descuento asignado', clase: 'text-end',
+          formato: (v) => `<span class="badge text-bg-${Number(v) > 0 ? 'success' : 'light'}">${Number(v)}%</span>` },
+      ],
+      campos: [
+        { campo: 'codigo', etiqueta: 'Código', soloAlCrear: true, ayuda: 'Déjalo vacío para generarlo (C-0001, C-0002...)' },
+        { campo: 'nombre', etiqueta: 'Nombre o razón social', requerido: true },
+        { campo: 'telefono', etiqueta: 'Teléfono' },
+        { campo: 'email', etiqueta: 'Correo', tipo: 'email' },
+        { campo: 'rfc', etiqueta: 'RFC (para factura)' },
+        { campo: 'porcentaje_descuento', etiqueta: 'Porcentaje de descuento', tipo: 'number', paso: '0.5', min: 0, soloAdmin: true, porDefecto: 0 },
+        { campo: 'direccion', etiqueta: 'Dirección', col: 12 },
+      ],
+      puedeEditar: (c) => c.codigo !== 'PG',
+      puedeEliminar: (c) => ES_ADMIN() && c.codigo !== 'PG',
+    });
+  </script>
+</body>
+</html>

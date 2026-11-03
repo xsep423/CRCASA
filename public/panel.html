@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRCASA | Panel del administrador</title>
+  <link href="/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/vendor/icons/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/estilos.css" rel="stylesheet">
+</head>
+<body>
+  <div id="nav"></div>
+  <main class="container py-4">
+    <h1 class="h4 mb-3">Panel del administrador</h1>
+
+    <div class="row g-3 mb-4" id="tarjetas"></div>
+
+    <div class="row g-3 mb-4">
+      <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+        <h2 class="h6">Productos por reabastecer</h2>
+        <table class="table table-sm mb-0"><thead><tr><th>Código</th><th>Producto</th><th class="text-end">Existencia</th><th class="text-end">Mínimo</th></tr></thead>
+          <tbody id="bajos"></tbody></table>
+      </div></div></div>
+      <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+        <h2 class="h6">Más vendidos (últimos 30 días)</h2>
+        <table class="table table-sm mb-0"><thead><tr><th>Producto</th><th class="text-end">Piezas</th><th class="money">Importe</th></tr></thead>
+          <tbody id="top"></tbody></table>
+      </div></div></div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-lg-4"><div class="card"><div class="card-body">
+        <h2 class="h6">Reglas de descuento y cotización</h2>
+        <form id="form-config">
+          <label class="form-label">Tope de descuento que puede aplicar el capturista (%)</label>
+          <input name="tope_descuento" type="number" min="0" max="100" step="0.5" class="form-control mb-2">
+          <label class="form-label">Días de vigencia de una cotización</label>
+          <input name="dias_vigencia_cotizacion" type="number" min="1" max="90" class="form-control mb-3">
+          <button class="btn btn-primary">Guardar</button>
+        </form>
+        <p class="form-text mt-2 mb-0">El descuento de cada cliente se asigna en <a href="/clientes.html">Clientes</a>. Los descuentos no se acumulan.</p>
+      </div></div></div>
+      <div class="col-lg-8">
+        <h2 class="h6">Clasificaciones de productos</h2>
+        <div id="clasificaciones"></div>
+      </div>
+    </div>
+  </main>
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    requerirSesion(['administrador', 'soporte']);
+    const $ = (id) => document.getElementById(id);
+    const tarjeta = (titulo, valor, sub, icono, href) => `<div class="col-sm-6 col-lg-3"><a href="${href}" class="text-decoration-none">
+      <div class="card h-100"><div class="card-body"><div class="text-muted small"><i class="bi bi-${icono}"></i> ${titulo}</div>
+      <div class="fs-3 fw-bold text-dark">${valor}</div><div class="small text-muted">${sub}</div></div></div></a></div>`;
+
+    (async () => {
+      const r = await API.get('/resumen');
+      $('tarjetas').innerHTML =
+        tarjeta('Ventas de hoy', dinero(r.hoy.importe), `${r.hoy.ventas} venta${r.hoy.ventas === 1 ? '' : 's'} · ${dinero(r.hoy.descuentos)} en descuentos`, 'cash-coin', '/ventas.html') +
+        tarjeta('Ventas del mes', dinero(r.mes.importe), `${r.mes.ventas} venta${r.mes.ventas === 1 ? '' : 's'}`, 'calendar3', '/ventas.html') +
+        tarjeta('Cotizaciones vigentes', r.cotizaciones_vigentes, 'pendientes de respuesta del cliente', 'file-earmark-text', '/cotizaciones.html') +
+        tarjeta('Pedidos para recoger', r.pedidos_pendientes, 'pendientes de entrega', 'bag', '/ventas.html?estado=pendiente_entrega');
+      $('bajos').innerHTML = r.bajo_minimo.map((p) => `<tr><td><code>${esc(p.codigo)}</code></td><td>${esc(p.nombre)}</td>
+        <td class="text-end text-danger fw-bold">${p.existencia}</td><td class="text-end">${p.existencia_minima}</td></tr>`).join('')
+        || '<tr><td colspan="4" class="text-muted">Todo en orden</td></tr>';
+      $('top').innerHTML = r.mas_vendidos.map((p) => `<tr><td>${esc(p.nombre)}</td><td class="text-end">${p.piezas}</td>
+        <td class="money">${dinero(p.importe)}</td></tr>`).join('') || '<tr><td colspan="3" class="text-muted">Sin ventas recientes</td></tr>';
+
+      const cfg = await API.get('/configuracion');
+      $('form-config').tope_descuento.value = cfg.tope_descuento;
+      $('form-config').dias_vigencia_cotizacion.value = cfg.dias_vigencia_cotizacion;
+    })().catch(avisarError);
+
+    $('form-config').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try { avisar((await API.put('/configuracion', Object.fromEntries(new FormData(e.target)))).mensaje); } catch (err) { avisarError(err); }
+    });
+
+    Catalogo({
+      contenedor: '#clasificaciones', endpoint: '/clasificaciones', id: 'id_clasificacion', nombre: 'clasificación',
+      textoNuevo: 'Nueva clasificación', buscar: false,
+      columnas: [{ campo: 'nombre', titulo: 'Nombre' }, { campo: 'descripcion', titulo: 'Descripción' },
+        { campo: 'productos', titulo: 'Productos', clase: 'text-end' }],
+      campos: [{ campo: 'nombre', etiqueta: 'Nombre', requerido: true }, { campo: 'descripcion', etiqueta: 'Descripción' }],
+      puedeEliminar: (c) => c.productos === 0,
+    });
+  </script>
+</body>
+</html>

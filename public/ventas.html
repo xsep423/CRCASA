@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRCASA | Ventas</title>
+  <link href="/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/vendor/icons/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/estilos.css" rel="stylesheet">
+</head>
+<body>
+  <div id="nav"></div>
+  <main class="container py-4">
+    <h1 class="h4 mb-3">Ventas</h1>
+    <div class="row g-2 mb-3">
+      <div class="col-md-4"><input id="buscar" class="form-control" placeholder="Folio, cliente o código de cliente"></div>
+      <div class="col-md-2"><input id="desde" type="date" class="form-control" title="Desde"></div>
+      <div class="col-md-2"><input id="hasta" type="date" class="form-control" title="Hasta"></div>
+      <div class="col-md-3">
+        <select id="estado" class="form-select">
+          <option value="">Todos los estados</option><option value="pendiente_entrega">Pedidos pendientes de entrega</option>
+          <option value="pagada">Pagadas</option><option value="entregada">Entregadas</option><option value="cancelada">Canceladas</option>
+        </select>
+      </div>
+    </div>
+    <div class="card"><div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light"><tr><th>Folio</th><th>Fecha</th><th>Cliente</th><th>Atendió</th><th>Pago</th>
+          <th class="text-end">Desc.</th><th class="money">Total</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tabla"></tbody>
+        <tfoot class="table-light"><tr><th colspan="6" class="text-end">Total (sin canceladas)</th><th class="money" id="suma"></th><th colspan="2"></th></tr></tfoot>
+      </table>
+    </div></div>
+  </main>
+
+  <div class="modal fade" id="modal-factura" tabindex="-1"><div class="modal-dialog"><form class="modal-content" id="form-factura">
+    <div class="modal-header"><h5 class="modal-title">Factura de la venta #<span id="fac-folio"></span></h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="mb-2"><label class="form-label">RFC del cliente *</label><input name="rfc" class="form-control text-uppercase" maxlength="13" required></div>
+      <div class="mb-2"><label class="form-label">Razón social *</label><input name="razon_social" class="form-control" required></div>
+      <div class="mb-2"><label class="form-label">Uso de CFDI</label><select name="uso_cfdi" class="form-select">
+        <option value="G03">G03 · Gastos en general</option><option value="G01">G01 · Adquisición de mercancías</option>
+        <option value="S01">S01 · Sin efectos fiscales</option></select></div>
+      <p class="form-text mb-0">La factura se registra en el sistema; el timbrado ante el SAT queda fuera del alcance del proyecto.</p>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+      <button class="btn btn-primary">Registrar factura</button></div>
+  </form></div></div>
+
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    requerirSesion();
+    const modalFac = new bootstrap.Modal(document.getElementById('modal-factura'));
+    const $ = (id) => document.getElementById(id);
+    let filas = [], actual = null;
+
+    async function cargar() {
+      const params = new URLSearchParams();
+      for (const k of ['buscar', 'desde', 'hasta', 'estado']) if ($(k).value) params.set(k, $(k).value.trim());
+      try {
+        filas = await API.get('/ventas?' + params);
+        $('tabla').innerHTML = filas.map((v, i) => `<tr class="${v.estado === 'cancelada' ? 'text-muted' : ''}">
+          <td><strong>${v.id_venta}</strong>${v.id_cotizacion ? `<br><small class="text-muted">de cot. ${v.id_cotizacion}</small>` : ''}</td>
+          <td>${fecha(v.fecha)}</td><td>${esc(v.codigo_cliente)} · ${esc(v.cliente)}</td><td>${esc(v.vendio)}</td>
+          <td>${esc(v.metodo_pago)}</td><td class="text-end">${Number(v.porcentaje_descuento)}%</td>
+          <td class="money">${dinero(v.total)}</td><td>${badgeEstado(v.estado)}</td>
+          <td class="text-end text-nowrap">
+            <a class="btn btn-sm btn-outline-secondary" href="/nota.html?tipo=venta&id=${v.id_venta}" target="_blank" title="Ver / imprimir"><i class="bi bi-printer"></i></a>
+            ${v.estado === 'pendiente_entrega' ? `<button class="btn btn-sm btn-warning" data-entregar="${i}" title="Marcar como entregado"><i class="bi bi-bag-check"></i></button>` : ''}
+            ${v.estado !== 'cancelada' && v.codigo_cliente !== 'PG' ? `<button class="btn btn-sm btn-outline-primary" data-factura="${i}" title="Factura"><i class="bi bi-file-earmark-ruled"></i></button>` : ''}
+            ${v.estado !== 'cancelada' && ES_ADMIN() ? `<button class="btn btn-sm btn-outline-danger" data-cancelar="${i}" title="Cancelar venta"><i class="bi bi-x-lg"></i></button>` : ''}
+          </td></tr>`).join('') || '<tr><td colspan="9" class="text-center text-muted py-4">Sin ventas</td></tr>';
+        $('suma').textContent = dinero(filas.filter((v) => v.estado !== 'cancelada').reduce((s, v) => s + Number(v.total), 0));
+      } catch (err) { avisarError(err); }
+    }
+
+    $('tabla').addEventListener('click', async (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      const v = filas[b.dataset.entregar ?? b.dataset.factura ?? b.dataset.cancelar];
+      try {
+        if (b.dataset.entregar !== undefined) {
+          avisar((await API.post(`/ventas/${v.id_venta}/entregar`)).mensaje); cargar();
+        } else if (b.dataset.factura !== undefined) {
+          const d = await API.get(`/ventas/${v.id_venta}`);
+          if (d.id_factura) return avisar(`Esta venta ya tiene la factura #${d.id_factura}`, 'info');
+          actual = d;
+          $('fac-folio').textContent = d.id_venta;
+          $('form-factura').rfc.value = d.rfc_cliente || '';
+          $('form-factura').razon_social.value = d.cliente;
+          modalFac.show();
+        } else if (b.dataset.cancelar !== undefined) {
+          if (!confirm(`¿Cancelar la venta #${v.id_venta}? La mercancía regresa al inventario.`)) return;
+          avisar((await API.post(`/ventas/${v.id_venta}/cancelar`)).mensaje); cargar();
+        }
+      } catch (err) { avisarError(err); }
+    });
+
+    $('form-factura').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const r = await API.post(`/ventas/${actual.id_venta}/factura`, Object.fromEntries(new FormData(e.target)));
+        modalFac.hide();
+        avisar(`${r.mensaje} (#${r.id_factura})`);
+      } catch (err) { avisarError(err); }
+    });
+
+    let t;
+    $('buscar').addEventListener('input', () => { clearTimeout(t); t = setTimeout(cargar, 250); });
+    for (const k of ['desde', 'hasta', 'estado']) $(k).addEventListener('change', cargar);
+    if (new URLSearchParams(location.search).get('estado')) $('estado').value = new URLSearchParams(location.search).get('estado');
+    cargar();
+  </script>
+</body>
+</html>
