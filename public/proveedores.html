@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRCASA | Proveedores</title>
+  <link href="/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/vendor/icons/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/estilos.css" rel="stylesheet">
+</head>
+<body>
+  <div id="nav"></div>
+  <main class="container py-4">
+    <h1 class="h4 mb-3">Proveedores</h1>
+    <div id="catalogo"></div>
+  </main>
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    requerirSesion(['administrador','soporte']);
+    // PROVEEDORES = a quienes compramos mercancía (no confundir con clientes)
+    Catalogo({
+      contenedor: '#catalogo', endpoint: '/proveedores', id: 'id_proveedor', nombre: 'proveedor', textoNuevo: 'Nuevo proveedor', buscar: false,
+      columnas: [
+        { campo: 'nombre', titulo: 'Proveedor' }, { campo: 'contacto', titulo: 'Contacto' },
+        { campo: 'telefono', titulo: 'Teléfono' }, { campo: 'email', titulo: 'Correo' }, { campo: 'rfc', titulo: 'RFC' },
+      ],
+      campos: [
+        { campo: 'nombre', etiqueta: 'Nombre o razón social', requerido: true },
+        { campo: 'contacto', etiqueta: 'Persona de contacto' },
+        { campo: 'telefono', etiqueta: 'Teléfono' },
+        { campo: 'email', etiqueta: 'Correo', tipo: 'email' },
+        { campo: 'rfc', etiqueta: 'RFC' },
+        { campo: 'direccion', etiqueta: 'Dirección' },
+      ],
+      puedeEliminar: () => true,
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRCASA | Nota</title>
+  <link href="/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/vendor/icons/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/estilos.css" rel="stylesheet">
+</head>
+<body>
+  <div class="text-center my-3 no-print">
+    <button class="btn btn-primary" onclick="print()"><i class="bi bi-printer"></i> Imprimir</button>
+    <button class="btn btn-outline-secondary" onclick="close()">Cerrar</button>
+  </div>
+  <div class="nota shadow-sm" id="nota"><p class="text-muted">Cargando...</p></div>
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    requerirSesion();
+    (async () => {
+      const p = new URLSearchParams(location.search);
+      const tipo = p.get('tipo') === 'cotizacion' ? 'cotizacion' : 'venta';
+      try {
+        const d = await API.get(`/${tipo === 'venta' ? 'ventas' : 'cotizaciones'}/${p.get('id')}`);
+        const folio = tipo === 'venta' ? d.id_venta : d.id_cotizacion;
+        document.title = `CRCASA | ${tipo === 'venta' ? 'Nota de venta' : 'Cotización'} ${folio}`;
+        document.getElementById('nota').innerHTML = `
+          <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
+            <div><h1 class="h4 mb-0" style="color:var(--crcasa)">Papelería CRCASA</h1>
+              <small class="text-muted">Artículos escolares y de oficina · Tijuana, B.C.</small></div>
+            <div class="text-end"><h2 class="h5 mb-0">${tipo === 'venta' ? 'Nota de venta' : 'Cotización'}</h2>
+              <div>Folio <strong>${folio}</strong></div><small>${fecha(d.fecha)}</small>
+              <div>${badgeEstado(d.estado)}</div></div>
+          </div>
+          <div class="row mb-3">
+            <div class="col"><strong>Cliente:</strong> ${esc(d.codigo_cliente)} · ${esc(d.cliente)}</div>
+            <div class="col text-end">${tipo === 'venta'
+              ? `<strong>Pago:</strong> ${esc(d.metodo_pago)} · <strong>Entrega:</strong> ${d.tipo_entrega === 'recoger' ? 'Para recoger' : 'Mostrador'}`
+              : `<strong>Vigente hasta:</strong> ${fechaCorta(d.vigencia)}`}</div>
+          </div>
+          <table class="table table-sm">
+            <thead><tr><th>Código</th><th>Descripción</th><th class="text-end">Cant.</th><th class="money">Precio</th><th class="money">Importe</th></tr></thead>
+            <tbody>${d.partidas.map((x) => `<tr><td>${esc(x.codigo)}</td><td>${esc(x.nombre)}</td>
+              <td class="text-end">${x.cantidad}</td><td class="money">${dinero(x.precio_unitario)}</td><td class="money">${dinero(x.importe)}</td></tr>`).join('')}</tbody>
+          </table>
+          <div class="ms-auto" style="max-width:280px">
+            <div class="d-flex justify-content-between"><span>Subtotal</span><span class="money">${dinero(d.subtotal)}</span></div>
+            <div class="d-flex justify-content-between"><span>Descuento (${Number(d.porcentaje_descuento)}%)</span><span class="money">-${dinero(d.descuento)}</span></div>
+            <div class="d-flex justify-content-between fs-5 fw-bold border-top mt-1 pt-1"><span>Total</span><span class="money">${dinero(d.total)}</span></div>
+          </div>
+          <p class="small text-muted mt-4 mb-0">${tipo === 'venta'
+            ? `Atendió: ${esc(d.vendio)}. Este documento no es una factura.`
+            : `Elaboró: ${esc(d.capturo)}. Precios sujetos a existencia al momento de la compra. Esta cotización no aparta mercancía.`}</p>`;
+      } catch (err) {
+        document.getElementById('nota').innerHTML = `<div class="alert alert-danger">${esc(err.message)}</div>`;
+      }
+    })();
+  </script>
+</body>
+</html>

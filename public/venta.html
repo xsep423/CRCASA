@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRCASA | Captura de venta y cotización</title>
+  <link href="/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/vendor/icons/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/estilos.css" rel="stylesheet">
+</head>
+<body>
+  <div id="nav"></div>
+  <main class="container-fluid py-3">
+    <div id="banner-cotizacion" class="alert alert-info d-none d-flex align-items-center gap-2">
+      <i class="bi bi-pencil-square"></i>
+      <span>Editando la <strong>cotización #<span id="num-cot"></span></strong>. Los cambios no afectan el inventario hasta convertirla en venta.</span>
+      <a href="/venta.html" class="btn btn-sm btn-outline-secondary ms-auto">Salir sin guardar</a>
+    </div>
+
+    <div class="row g-3">
+      <!-- Columna izquierda: cliente + productos -->
+      <div class="col-lg-8">
+        <!-- 1. Cliente -->
+        <div class="card mb-3"><div class="card-body">
+          <h2 class="h6 text-muted mb-2">1. Cliente</h2>
+          <div class="row g-2 align-items-center">
+            <div class="col-sm-4">
+              <div class="input-group">
+                <input id="codigo-cliente" class="form-control" placeholder="Código de cliente" autocomplete="off">
+                <button class="btn btn-outline-secondary" id="btn-buscar-cliente" title="Buscar por nombre"><i class="bi bi-search"></i></button>
+              </div>
+            </div>
+            <div class="col-sm-6 cliente-info d-flex align-items-center gap-2" id="cliente-info"></div>
+            <div class="col-sm-2 text-end">
+              <button class="btn btn-outline-primary w-100" id="btn-nuevo-cliente"><i class="bi bi-person-plus"></i> Nuevo</button>
+            </div>
+          </div>
+        </div></div>
+
+        <!-- 2. Productos -->
+        <div class="card"><div class="card-body">
+          <h2 class="h6 text-muted mb-2">2. Productos</h2>
+          <div class="row g-2 mb-3">
+            <div class="col-sm-8 position-relative">
+              <input id="buscar-producto" class="form-control form-control-lg" placeholder="Código o nombre del producto (Enter para agregar)" autocomplete="off">
+              <div id="resultados-busqueda" class="list-group shadow d-none"></div>
+            </div>
+            <div class="col-sm-2">
+              <input id="cantidad" type="number" min="1" value="1" class="form-control form-control-lg" title="Cantidad">
+            </div>
+            <div class="col-sm-2">
+              <button class="btn btn-primary btn-lg w-100" id="btn-agregar"><i class="bi bi-plus-lg"></i></button>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table tabla-captura">
+              <thead class="table-light"><tr>
+                <th>Código</th><th>Descripción</th><th>Cantidad</th><th class="money">Precio</th><th class="money">Importe</th><th></th>
+              </tr></thead>
+              <tbody id="partidas"></tbody>
+            </table>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- Columna derecha: totales y acciones -->
+      <div class="col-lg-4">
+        <div class="card sticky-top" style="top:1rem"><div class="card-body">
+          <h2 class="h6 text-muted mb-3">3. Totales</h2>
+          <div class="d-flex justify-content-between mb-1"><span>Subtotal</span><span class="money" id="t-subtotal">$0.00</span></div>
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span>Descuento
+              <input id="pct" type="number" min="0" step="0.5" class="form-control form-control-sm d-inline-block mx-1" style="width:80px"> %
+            </span>
+            <span class="money text-danger" id="t-descuento">-$0.00</span>
+          </div>
+          <div class="form-text mb-2" id="ayuda-descuento"></div>
+          <hr>
+          <div class="d-flex justify-content-between align-items-baseline mb-3">
+            <span class="fs-5">Total</span><span class="total-grande money" id="t-total">$0.00</span>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label small mb-0">Pago</label>
+              <select id="metodo" class="form-select">
+                <option value="efectivo">Efectivo</option><option value="tarjeta">Tarjeta</option><option value="transferencia">Transferencia</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-0">Entrega</label>
+              <select id="entrega" class="form-select">
+                <option value="mostrador">En mostrador</option><option value="recoger">Pedido para recoger</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="faltantes" class="alert alert-warning d-none small"></div>
+
+          <div class="d-grid gap-2">
+            <button class="btn btn-success btn-lg" id="btn-venta"><i class="bi bi-cash-coin"></i> <span>Registrar venta</span> <span class="atajo">F2</span></button>
+            <button class="btn btn-outline-primary" id="btn-cotizacion"><i class="bi bi-file-earmark-text"></i> <span>Guardar como cotización</span> <span class="atajo">F4</span></button>
+            <button class="btn btn-outline-secondary" id="btn-limpiar"><i class="bi bi-x-lg"></i> Cancelar captura</button>
+          </div>
+          <p class="form-text mt-2 mb-0">La cotización no descuenta inventario. La venta sí.</p>
+        </div></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal: buscar cliente -->
+  <div class="modal fade" id="modal-buscar-cliente" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Buscar cliente</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <input id="q-cliente" class="form-control mb-3" placeholder="Nombre, código o teléfono">
+      <div class="list-group" id="lista-clientes"></div>
+    </div>
+  </div></div></div>
+
+  <!-- Modal: alta rápida de cliente -->
+  <div class="modal fade" id="modal-nuevo-cliente" tabindex="-1"><div class="modal-dialog"><form class="modal-content" id="form-cliente">
+    <div class="modal-header"><h5 class="modal-title">Nuevo cliente</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="mb-2"><label class="form-label">Nombre o razón social *</label><input name="nombre" class="form-control" required minlength="3"></div>
+      <div class="mb-2"><label class="form-label">Teléfono</label><input name="telefono" class="form-control"></div>
+      <div class="mb-2"><label class="form-label">RFC (solo si pedirá factura)</label><input name="rfc" class="form-control" maxlength="13"></div>
+      <p class="form-text mb-0">El código se genera solo. El porcentaje de descuento lo asigna el administrador desde Clientes.</p>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary">Registrar</button></div>
+  </form></div></div>
+
+  <!-- Modal: resultado -->
+  <div class="modal fade" id="modal-listo" tabindex="-1" data-bs-backdrop="static"><div class="modal-dialog"><div class="modal-content">
+    <div class="modal-body text-center p-4">
+      <i class="bi bi-check-circle text-success" style="font-size:3rem"></i>
+      <h5 class="mt-2" id="listo-titulo"></h5>
+      <p class="mb-0" id="listo-detalle"></p>
+    </div>
+    <div class="modal-footer justify-content-center">
+      <a class="btn btn-outline-primary" id="listo-imprimir" target="_blank"><i class="bi bi-printer"></i> Imprimir</a>
+      <button class="btn btn-primary" id="listo-nueva">Nueva captura</button>
+    </div>
+  </div></div></div>
+
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/js/app.js"></script>
+  <script src="/js/venta.js"></script>
+</body>
+</html>

@@ -10,6 +10,24 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME,
   waitForConnections: true,
   connectionLimit: 10,
+  decimalNumbers: true, // DECIMAL llega como número y no como texto
+  dateStrings: true,
 });
+
+// Ejecuta fn dentro de una transacción: si algo falla, no se guarda nada a medias
+pool.transaccion = async (fn) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const resultado = await fn(conn);
+    await conn.commit();
+    return resultado;
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+};
 
 module.exports = pool;

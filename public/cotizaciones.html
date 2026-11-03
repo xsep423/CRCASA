@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRCASA | Cotizaciones</title>
+  <link href="/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/vendor/icons/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/estilos.css" rel="stylesheet">
+</head>
+<body>
+  <div id="nav"></div>
+  <main class="container py-4">
+    <div class="d-flex align-items-center mb-3">
+      <h1 class="h4 mb-0">Cotizaciones</h1>
+      <a href="/venta.html" class="btn btn-primary ms-auto"><i class="bi bi-plus-lg"></i> Nueva cotización</a>
+    </div>
+    <div class="row g-2 mb-3">
+      <div class="col-md-5"><input id="buscar" class="form-control" placeholder="Folio, cliente o código de cliente"></div>
+      <div class="col-md-3">
+        <select id="estado" class="form-select">
+          <option value="vigente">Vigentes</option><option value="convertida">Convertidas en venta</option>
+          <option value="vencida">Vencidas</option><option value="cancelada">Canceladas</option><option value="">Todas</option>
+        </select>
+      </div>
+    </div>
+    <div class="card"><div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light"><tr><th>Folio</th><th>Fecha</th><th>Cliente</th><th class="text-end">Productos</th>
+          <th class="text-end">Desc.</th><th class="money">Total</th><th>Vigencia</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tabla"></tbody>
+      </table>
+    </div></div>
+    <p class="form-text mt-2">Las cotizaciones no afectan el inventario. Al convertirlas en venta se revisa la existencia y se descuenta.</p>
+  </main>
+
+  <div class="modal fade" id="modal-convertir" tabindex="-1"><div class="modal-dialog"><form class="modal-content" id="form-convertir">
+    <div class="modal-header"><h5 class="modal-title">Convertir cotización #<span id="conv-folio"></span> en venta</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <p>Total: <strong id="conv-total"></strong>. Se respetan los precios y el descuento cotizados.</p>
+      <div class="row g-2">
+        <div class="col"><label class="form-label">Pago</label><select name="metodo_pago" class="form-select">
+          <option value="efectivo">Efectivo</option><option value="tarjeta">Tarjeta</option><option value="transferencia">Transferencia</option></select></div>
+        <div class="col"><label class="form-label">Entrega</label><select name="tipo_entrega" class="form-select">
+          <option value="mostrador">En mostrador</option><option value="recoger">Pedido para recoger</option></select></div>
+      </div>
+      <div id="conv-faltantes" class="alert alert-warning mt-3 d-none small"></div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+      <button class="btn btn-success">Registrar venta</button></div>
+  </form></div></div>
+
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    requerirSesion();
+    const modal = new bootstrap.Modal(document.getElementById('modal-convertir'));
+    let filas = [], actual = null;
+
+    async function cargar() {
+      const q = document.getElementById('buscar').value.trim();
+      const e = document.getElementById('estado').value;
+      const params = new URLSearchParams();
+      if (q) params.set('buscar', q);
+      if (e) params.set('estado', e);
+      try {
+        filas = await API.get('/cotizaciones?' + params);
+        document.getElementById('tabla').innerHTML = filas.map((c, i) => `<tr>
+          <td><strong>${c.id_cotizacion}</strong></td><td>${fecha(c.fecha)}</td>
+          <td>${esc(c.codigo_cliente)} · ${esc(c.cliente)}</td><td class="text-end">${c.productos}</td>
+          <td class="text-end">${Number(c.porcentaje_descuento)}%</td><td class="money">${dinero(c.total)}</td>
+          <td>${fechaCorta(c.vigencia)}</td><td>${badgeEstado(c.estado)}</td>
+          <td class="text-end text-nowrap">
+            <a class="btn btn-sm btn-outline-secondary" href="/nota.html?tipo=cotizacion&id=${c.id_cotizacion}" target="_blank" title="Ver / imprimir"><i class="bi bi-printer"></i></a>
+            ${c.estado === 'vigente' ? `
+              <a class="btn btn-sm btn-outline-primary" href="/venta.html?cotizacion=${c.id_cotizacion}" title="Editar"><i class="bi bi-pencil"></i></a>
+              <button class="btn btn-sm btn-success" data-convertir="${i}" title="Convertir en venta"><i class="bi bi-cash-coin"></i></button>
+              <button class="btn btn-sm btn-outline-danger" data-cancelar="${i}" title="Cancelar"><i class="bi bi-x-lg"></i></button>` : ''}
+          </td></tr>`).join('') || '<tr><td colspan="9" class="text-center text-muted py-4">Sin cotizaciones</td></tr>';
+      } catch (err) { avisarError(err); }
+    }
+
+    document.getElementById('tabla').addEventListener('click', async (e) => {
+      const conv = e.target.closest('[data-convertir]');
+      const canc = e.target.closest('[data-cancelar]');
+      if (conv) {
+        actual = filas[conv.dataset.convertir];
+        document.getElementById('conv-folio').textContent = actual.id_cotizacion;
+        document.getElementById('conv-total').textContent = dinero(actual.total);
+        document.getElementById('conv-faltantes').classList.add('d-none');
+        modal.show();
+      }
+      if (canc) {
+        const c = filas[canc.dataset.cancelar];
+        if (!confirm(`¿Cancelar la cotización #${c.id_cotizacion}?`)) return;
+        try { avisar((await API.post(`/cotizaciones/${c.id_cotizacion}/cancelar`)).mensaje); cargar(); } catch (err) { avisarError(err); }
+      }
+    });
+
+    document.getElementById('form-convertir').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const r = await API.post(`/cotizaciones/${actual.id_cotizacion}/convertir`, Object.fromEntries(new FormData(e.target)));
+        modal.hide();
+        avisar(`Venta #${r.id_venta} registrada`);
+        window.open(`/nota.html?tipo=venta&id=${r.id_venta}`, '_blank');
+        cargar();
+      } catch (err) {
+        if (!err.faltantes) return avisarError(err);
+        const box = document.getElementById('conv-faltantes');
+        box.innerHTML = `<strong>No hay existencia suficiente:</strong><ul class="mb-1">${err.faltantes.map((f) =>
+          `<li>${esc(f.nombre)}: cotizado ${f.solicitado}, hay ${f.existencia}</li>`).join('')}</ul>
+          <a href="/venta.html?cotizacion=${actual.id_cotizacion}">Editar la cotización</a> para ajustar cantidades.`;
+        box.classList.remove('d-none');
+      }
+    });
+
+    let t;
+    document.getElementById('buscar').addEventListener('input', () => { clearTimeout(t); t = setTimeout(cargar, 250); });
+    document.getElementById('estado').addEventListener('change', cargar);
+    cargar();
+  </script>
+</body>
+</html>
