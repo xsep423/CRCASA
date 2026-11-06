@@ -27,8 +27,8 @@
         document.title = `CRCASA | ${tipo === 'venta' ? 'Nota de venta' : 'Cotización'} ${folio}`;
         document.getElementById('nota').innerHTML = `
           <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
-            <div><h1 class="h4 mb-0" style="color:var(--crcasa)">Papelería CRCASA</h1>
-              <small class="text-muted">Artículos escolares y de oficina · Tijuana, B.C.</small></div>
+            <div><h1 class="h4 mb-0" style="color:var(--crcasa)">Papelería</h1>
+              <small class="text-muted">Artículos escolares y de oficina</small></div>
             <div class="text-end"><h2 class="h5 mb-0">${tipo === 'venta' ? 'Nota de venta' : 'Cotización'}</h2>
               <div>Folio <strong>${folio}</strong></div><small>${fecha(d.fecha)}</small>
               <div>${badgeEstado(d.estado)}</div></div>
@@ -50,8 +50,8 @@
             <div class="d-flex justify-content-between fs-5 fw-bold border-top mt-1 pt-1"><span>Total</span><span class="money">${dinero(d.total)}</span></div>
           </div>
           <p class="small text-muted mt-4 mb-0">${tipo === 'venta'
-            ? `Atendió: ${esc(d.vendio)}. Este documento no es una factura.`
-            : `Elaboró: ${esc(d.capturo)}. Precios sujetos a existencia al momento de la compra. Esta cotización no aparta mercancía.`}</p>`;
+            ? `Atendió: ${esc(d.vendio)}. Este documento no es una factura. Generado con el sistema CRCASA.`
+            : `Elaboró: ${esc(d.capturo)}. Precios sujetos a existencia al momento de la compra. Esta cotización no aparta mercancía. Generado con el sistema CRCASA.`}</p>`;
       } catch (err) {
         document.getElementById('nota').innerHTML = `<div class="alert alert-danger">${esc(err.message)}</div>`;
       }
