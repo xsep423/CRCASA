@@ -38,18 +38,23 @@ const API = {
 
 const ES_ADMIN = () => ['administrador', 'soporte'].includes(API.usuario()?.rol);
 
-// Menú según el rol del empleado
+// Menú según el rol del empleado. Lo de administración va agrupado en un submenú.
+const T = ['capturista', 'administrador', 'soporte'];
+const A = ['administrador', 'soporte'];
 const MENU = [
-  { href: '/venta.html', texto: 'Captura', icono: 'cart3', roles: ['capturista', 'administrador', 'soporte'] },
-  { href: '/cotizaciones.html', texto: 'Cotizaciones', icono: 'file-earmark-text', roles: ['capturista', 'administrador', 'soporte'] },
-  { href: '/ventas.html', texto: 'Ventas', icono: 'receipt', roles: ['capturista', 'administrador', 'soporte'] },
-  { href: '/clientes.html', texto: 'Clientes', icono: 'people', roles: ['capturista', 'administrador', 'soporte'] },
-  { href: '/productos.html', texto: 'Productos', icono: 'box-seam', roles: ['capturista', 'administrador', 'soporte'] },
-  { href: '/compras.html', texto: 'Compras', icono: 'truck', roles: ['administrador', 'soporte'] },
-  { href: '/proveedores.html', texto: 'Proveedores', icono: 'building', roles: ['administrador', 'soporte'] },
-  { href: '/panel.html', texto: 'Panel', icono: 'speedometer2', roles: ['administrador', 'soporte'] },
-  { href: '/usuarios.html', texto: 'Usuarios', icono: 'person-gear', roles: ['soporte'] },
-  { href: '/papelerias.html', texto: 'Papelerías', icono: 'shop', roles: ['soporte'] },
+  { href: '/venta.html', texto: 'Captura', icono: 'cart3', roles: T },
+  { href: '/cotizaciones.html', texto: 'Cotizaciones', icono: 'file-earmark-text', roles: T },
+  { href: '/ventas.html', texto: 'Ventas', icono: 'receipt', roles: T },
+  { href: '/clientes.html', texto: 'Clientes', icono: 'people', roles: T },
+  { href: '/productos.html', texto: 'Productos', icono: 'box-seam', roles: T },
+  { href: '/corte.html', texto: 'Corte de caja', icono: 'cash-stack', roles: T },
+  { href: '/panel.html', texto: 'Panel', icono: 'speedometer2', roles: A },
+  { href: '/compras.html', texto: 'Compras', icono: 'truck', roles: A, grupo: true },
+  { href: '/proveedores.html', texto: 'Proveedores', icono: 'building', roles: A, grupo: true },
+  { href: '/reportes.html', texto: 'Reportes', icono: 'bar-chart', roles: A, grupo: true },
+  { href: '/bitacora.html', texto: 'Bitácora', icono: 'journal-text', roles: A, grupo: true },
+  { href: '/usuarios.html', texto: 'Usuarios', icono: 'person-gear', roles: ['soporte'], grupo: true },
+  { href: '/papelerias.html', texto: 'Papelerías', icono: 'shop', roles: ['soporte'], grupo: true },
 ];
 
 const ETIQUETA_ROL = { capturista: 'Capturista', administrador: 'Administrador', soporte: 'Soporte técnico' };
@@ -61,29 +66,75 @@ function requerirSesion(roles) {
   if (roles && !roles.includes(u.rol)) { location.href = '/venta.html'; throw new Error('Sin permiso'); }
   const nav = document.getElementById('nav');
   if (nav) {
-    const links = MENU.filter((m) => m.roles.includes(u.rol)).map((m) =>
-      `<li class="nav-item"><a class="nav-link ${location.pathname === m.href ? 'active' : ''}" href="${m.href}">
-         <i class="bi bi-${m.icono}"></i> ${m.texto}</a></li>`).join('');
+    const mios = MENU.filter((m) => m.roles.includes(u.rol));
+    const link = (m) => `<li class="nav-item"><a class="nav-link ${location.pathname === m.href ? 'active' : ''}" href="${m.href}">
+         <i class="bi bi-${m.icono}"></i> ${m.texto}</a></li>`;
+    const grupo = mios.filter((m) => m.grupo);
+    const enGrupo = grupo.some((m) => m.href === location.pathname);
     nav.innerHTML = `
-      <nav class="navbar navbar-dark navbar-expand-lg no-print">
+      <nav class="navbar navbar-dark navbar-expand-xl no-print">
         <div class="container-fluid">
           <a class="navbar-brand fw-bold" href="/venta.html">CRCASA</a>
           <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menu"><span class="navbar-toggler-icon"></span></button>
           <div class="collapse navbar-collapse" id="menu">
-            <ul class="navbar-nav me-auto">${links}</ul>
+            <ul class="navbar-nav me-auto">${mios.filter((m) => !m.grupo).map(link).join('')}
+              ${grupo.length ? `<li class="nav-item dropdown">
+                <a class="nav-link dropdown-toggle ${enGrupo ? 'active' : ''}" href="#" role="button" data-bs-toggle="dropdown"><i class="bi bi-gear"></i> Administración</a>
+                <ul class="dropdown-menu">${grupo.map((m) => `<li><a class="dropdown-item ${location.pathname === m.href ? 'active' : ''}" href="${m.href}"><i class="bi bi-${m.icono}"></i> ${m.texto}</a></li>`).join('')}</ul>
+              </li>` : ''}
+            </ul>
             ${u.rol === 'soporte'
-              ? `<select id="cambiar-papeleria" class="form-select form-select-sm me-3" style="max-width:240px" title="Papelería con la que trabajas">
+              ? `<select id="cambiar-papeleria" class="form-select form-select-sm me-3" style="width:200px" title="Papelería con la que trabajas">
                    <option>${esc(u.papeleria || 'Selecciona papelería')}</option></select>`
-              : `<span class="navbar-text text-white me-3"><i class="bi bi-shop"></i> ${esc(u.papeleria || '')}</span>`}
-            <span class="navbar-text text-white me-3"><i class="bi bi-person-circle"></i> ${esc(u.nombre)}
-              <span class="badge bg-light text-dark">${ETIQUETA_ROL[u.rol]}</span></span>
-            <button class="btn btn-outline-light btn-sm" onclick="API.cerrarSesion()">Salir</button>
+              : `<span class="navbar-text text-white me-3 papeleria-actual" title="${esc(u.papeleria || '')}"><i class="bi bi-shop"></i> ${esc(u.papeleria || '')}</span>`}
+            <div class="dropdown">
+              <button class="btn btn-outline-light btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                <i class="bi bi-person-circle"></i> ${esc(u.nombre)}</button>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li><h6 class="dropdown-header">${ETIQUETA_ROL[u.rol]}${u.papeleria ? ` · ${esc(u.papeleria)}` : ''}</h6></li>
+                <li><a class="dropdown-item" href="#" id="menu-password"><i class="bi bi-key"></i> Cambiar mi contraseña</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="#" onclick="API.cerrarSesion()"><i class="bi bi-box-arrow-right"></i> Salir</a></li>
+              </ul>
+            </div>
           </div>
         </div>
       </nav>`;
     if (u.rol === 'soporte') prepararCambioPapeleria(u);
+    document.getElementById('menu-password').addEventListener('click', (e) => { e.preventDefault(); abrirCambioPassword(); });
   }
   return u;
+}
+
+// Cada empleado puede cambiar su propia contraseña desde el menú de su nombre
+function abrirCambioPassword() {
+  let el = document.getElementById('modal-password');
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'modal fade'; el.id = 'modal-password'; el.tabIndex = -1;
+    el.innerHTML = `<div class="modal-dialog"><form class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Cambiar mi contraseña</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-2"><label class="form-label">Contraseña actual</label><input name="actual" type="password" class="form-control" required autocomplete="current-password"></div>
+        <div class="mb-2"><label class="form-label">Nueva contraseña</label><input name="nueva" type="password" class="form-control" required minlength="8" autocomplete="new-password"></div>
+        <div class="mb-2"><label class="form-label">Repite la nueva contraseña</label><input name="repetir" type="password" class="form-control" required minlength="8" autocomplete="new-password"></div>
+        <p class="form-text mb-0">Mínimo 8 caracteres.</p>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary">Guardar</button></div>
+    </form></div>`;
+    document.body.appendChild(el);
+    el.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      if (f.nueva.value !== f.repetir.value) return avisar('Las contraseñas nuevas no coinciden', 'warning');
+      try {
+        avisar((await API.post('/auth/password', { actual: f.actual.value, nueva: f.nueva.value })).mensaje);
+        f.reset();
+        bootstrap.Modal.getInstance(el).hide();
+      } catch (err) { avisarError(err); }
+    });
+  }
+  bootstrap.Modal.getOrCreateInstance(el).show();
 }
 
 // Soporte técnico atiende a todas las papelerías: elige con cuál trabajar

@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const { HttpError } = require('../utils/http');
 const { pid } = require('../middleware/auth');
+const { movimiento, bitacora } = require('../services/registro');
 
 const SELECT = `SELECT p.id_producto, p.codigo, p.nombre, p.descripcion, p.precio_venta, p.costo,
                        p.existencia, p.existencia_minima, p.id_clasificacion, c.nombre AS clasificacion,
@@ -66,21 +67,30 @@ async function crear(req, res) {
   const valores = await validarRelaciones(req, datos(req.body));
   const existencia = Number(req.body.existencia || 0);
   if (!Number.isInteger(existencia) || existencia < 0) throw new HttpError(400, 'Existencia inicial inválida');
-  const [r] = await pool.query(
-    `INSERT INTO productos (codigo, nombre, descripcion, precio_venta, costo, existencia_minima,
-                            id_clasificacion, id_proveedor, existencia, id_papeleria)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`, [...valores, existencia, pid(req)]);
-  res.status(201).json({ mensaje: 'Producto creado', id: r.insertId });
+  const id = await pool.transaccion(async (conn) => {
+    const [r] = await conn.query(
+      `INSERT INTO productos (codigo, nombre, descripcion, precio_venta, costo, existencia_minima,
+                              id_clasificacion, id_proveedor, existencia, id_papeleria)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`, [...valores, existencia, pid(req)]);
+    await movimiento(conn, { idPapeleria: pid(req), idProducto: r.insertId, tipo: 'inicial', cantidad: existencia,
+      referencia: 'Existencia inicial', idUsuario: req.usuario.id });
+    return r.insertId;
+  });
+  res.status(201).json({ mensaje: 'Producto creado', id });
 }
 
 // PUT /api/productos/:id (admin) — no modifica existencia
 async function actualizar(req, res) {
+  const [antes] = await pool.query('SELECT codigo, precio_venta FROM productos WHERE id_producto = ? AND id_papeleria = ?', [req.params.id, pid(req)]);
   const [r] = await pool.query(
     `UPDATE productos SET codigo=?, nombre=?, descripcion=?, precio_venta=?, costo=?, existencia_minima=?,
             id_clasificacion=?, id_proveedor=?
      WHERE id_producto = ? AND id_papeleria = ? AND activo = 1`,
     [...(await validarRelaciones(req, datos(req.body))), req.params.id, pid(req)]);
   if (!r.affectedRows) throw new HttpError(404, 'Producto no encontrado');
+  if (antes.length && Number(antes[0].precio_venta) !== Number(req.body.precio_venta)) {
+    await bitacora(req.usuario, 'Cambiar precio', `${antes[0].codigo}: ${antes[0].precio_venta} → ${req.body.precio_venta}`);
+  }
   res.json({ mensaje: 'Producto actualizado' });
 }
 
@@ -91,4 +101,16 @@ async function eliminar(req, res) {
   res.json({ mensaje: 'Producto dado de baja' });
 }
 
-module.exports = { listar, porCodigo, obtener, crear, actualizar, eliminar };
+// GET /api/productos/:id/movimientos — kárdex: cada entrada y salida del producto
+async function movimientos(req, res) {
+  const [p] = await pool.query('SELECT id_producto, codigo, nombre, existencia FROM productos WHERE id_producto = ? AND id_papeleria = ?',
+    [req.params.id, pid(req)]);
+  if (!p.length) throw new HttpError(404, 'Producto no encontrado');
+  const [rows] = await pool.query(
+    `SELECT m.fecha, m.tipo, m.cantidad, m.existencia, m.referencia, u.nombre AS usuario
+     FROM movimientos_inventario m LEFT JOIN usuarios u ON u.id_usuario = m.id_usuario
+     WHERE m.id_producto = ? AND m.id_papeleria = ? ORDER BY m.id_movimiento DESC LIMIT 300`, [req.params.id, pid(req)]);
+  res.json({ producto: p[0], movimientos: rows });
+}
+
+module.exports = { listar, porCodigo, obtener, crear, actualizar, eliminar, movimientos };

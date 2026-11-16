@@ -62,7 +62,7 @@
       try {
         filas = await API.get('/ventas?' + params);
         $('tabla').innerHTML = filas.map((v, i) => `<tr class="${v.estado === 'cancelada' ? 'text-muted' : ''}">
-          <td><strong>${v.id_venta}</strong>${v.id_cotizacion ? `<br><small class="text-muted">de cot. ${v.id_cotizacion}</small>` : ''}</td>
+          <td><strong>${v.folio}</strong>${v.folio_cotizacion ? `<br><small class="text-muted">de cot. ${v.folio_cotizacion}</small>` : ''}</td>
           <td>${fecha(v.fecha)}</td><td>${esc(v.codigo_cliente)} · ${esc(v.cliente)}</td><td>${esc(v.vendio)}</td>
           <td>${esc(v.metodo_pago)}</td><td class="text-end">${Number(v.porcentaje_descuento)}%</td>
           <td class="money">${dinero(v.total)}</td><td>${badgeEstado(v.estado)}</td>
@@ -87,12 +87,12 @@
           const d = await API.get(`/ventas/${v.id_venta}`);
           if (d.id_solicitud) return avisar(`Esta venta ya tiene la solicitud de factura #${d.id_solicitud}`, 'info');
           actual = d;
-          $('fac-folio').textContent = d.id_venta;
+          $('fac-folio').textContent = d.folio;
           $('form-factura').rfc.value = d.rfc_cliente || '';
           $('form-factura').razon_social.value = d.cliente;
           modalFac.show();
         } else if (b.dataset.cancelar !== undefined) {
-          if (!confirm(`¿Cancelar la venta #${v.id_venta}? La mercancía regresa al inventario.`)) return;
+          if (!confirm(`¿Cancelar la venta folio ${v.folio}? La mercancía regresa al inventario.`)) return;
           avisar((await API.post(`/ventas/${v.id_venta}/cancelar`)).mensaje); cargar();
         }
       } catch (err) { avisarError(err); }

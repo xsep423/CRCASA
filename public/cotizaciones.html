@@ -67,7 +67,7 @@
       try {
         filas = await API.get('/cotizaciones?' + params);
         document.getElementById('tabla').innerHTML = filas.map((c, i) => `<tr>
-          <td><strong>${c.id_cotizacion}</strong></td><td>${fecha(c.fecha)}</td>
+          <td><strong>${c.folio}</strong></td><td>${fecha(c.fecha)}</td>
           <td>${esc(c.codigo_cliente)} · ${esc(c.cliente)}</td><td class="text-end">${c.productos}</td>
           <td class="text-end">${Number(c.porcentaje_descuento)}%</td><td class="money">${dinero(c.total)}</td>
           <td>${fechaCorta(c.vigencia)}</td><td>${badgeEstado(c.estado)}${c.motivo_cancelacion ? `<br><small class="text-muted">${esc(c.motivo_cancelacion)}</small>` : ''}</td>
@@ -86,15 +86,17 @@
       const canc = e.target.closest('[data-cancelar]');
       if (conv) {
         actual = filas[conv.dataset.convertir];
-        document.getElementById('conv-folio').textContent = actual.id_cotizacion;
+        document.getElementById('conv-folio').textContent = actual.folio;
         document.getElementById('conv-total').textContent = dinero(actual.total);
         document.getElementById('conv-faltantes').classList.add('d-none');
         modal.show();
       }
       if (canc) {
         const c = filas[canc.dataset.cancelar];
-        if (!confirm(`¿Cancelar la cotización #${c.id_cotizacion}?`)) return;
-        try { avisar((await API.post(`/cotizaciones/${c.id_cotizacion}/cancelar`)).mensaje); cargar(); } catch (err) { avisarError(err); }
+        // La cotización no se borra: queda cancelada con el motivo que escriba el capturista
+        const motivo = prompt(`¿Por qué se cancela la cotización folio ${c.folio}? (deja vacío si no sabes)`);
+        if (motivo === null) return;
+        try { avisar((await API.post(`/cotizaciones/${c.id_cotizacion}/cancelar`, { motivo: motivo.trim() || undefined })).mensaje); cargar(); } catch (err) { avisarError(err); }
       }
     });
 
@@ -103,7 +105,7 @@
       try {
         const r = await API.post(`/cotizaciones/${actual.id_cotizacion}/convertir`, Object.fromEntries(new FormData(e.target)));
         modal.hide();
-        avisar(`Venta #${r.id_venta} registrada`);
+        avisar(`Venta folio ${r.folio} registrada`);
         window.open(`/nota.html?tipo=venta&id=${r.id_venta}`, '_blank');
         cargar();
       } catch (err) {

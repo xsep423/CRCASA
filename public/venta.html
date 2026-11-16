@@ -95,6 +95,17 @@
             </div>
           </div>
 
+          <!-- Cobro en efectivo: con cuánto paga el cliente y cuánto cambio se le da -->
+          <div id="cobro" class="border rounded p-2 mb-3 bg-light">
+            <div class="d-flex justify-content-between align-items-center">
+              <label for="pago-con" class="mb-0">Pagó con</label>
+              <input id="pago-con" type="number" min="0" step="0.5" class="form-control text-end" style="max-width:140px" placeholder="$0.00">
+            </div>
+            <div class="d-flex justify-content-between align-items-baseline mt-2">
+              <span>Cambio</span><span class="fs-4 fw-bold money" id="t-cambio">$0.00</span>
+            </div>
+          </div>
+
           <div id="faltantes" class="alert alert-warning d-none small"></div>
 
           <div class="d-grid gap-2">

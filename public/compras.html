@@ -14,6 +14,13 @@
     <h1 class="h4 mb-1">Compras a proveedores</h1>
     <p class="text-muted">Mercancía que llega a la papelería. Al registrarla se suma a la existencia y se actualiza el costo.</p>
 
+    <!-- Sugerencia: productos en o debajo de su mínimo, agrupados por proveedor -->
+    <div class="card mb-4 border-warning" id="sugerencia-card"><div class="card-body">
+      <h2 class="h6 mb-1"><i class="bi bi-lightbulb text-warning"></i> Sugerencia de compra</h2>
+      <p class="small text-muted mb-2">Productos en o debajo de su existencia mínima. La cantidad sugerida alcanza el doble del mínimo.</p>
+      <div id="sugerencia"></div>
+    </div></div>
+
     <div class="card mb-4"><div class="card-body">
       <div class="row g-2 mb-3">
         <div class="col-md-5"><label class="form-label">Proveedor *</label><select id="proveedor" class="form-select"></select></div>
@@ -36,7 +43,7 @@
     <h2 class="h5">Historial</h2>
     <div class="card"><div class="table-responsive">
       <table class="table table-hover mb-0">
-        <thead class="table-light"><tr><th>#</th><th>Fecha</th><th>Proveedor</th><th>Folio proveedor</th><th class="text-end">Productos</th><th class="money">Total</th><th>Registró</th></tr></thead>
+        <thead class="table-light"><tr><th>Folio</th><th>Fecha</th><th>Proveedor</th><th>Folio proveedor</th><th class="text-end">Productos</th><th class="money">Total</th><th>Registró</th></tr></thead>
         <tbody id="historial"></tbody>
       </table>
     </div></div>
@@ -90,18 +97,49 @@
       try {
         const r = await API.post('/compras', { id_proveedor: $('proveedor').value, folio_proveedor: $('folio').value, partidas });
         avisar(r.mensaje);
-        partidas = []; $('folio').value = ''; pintar(); historial();
+        partidas = []; $('folio').value = ''; pintar(); historial(); sugerencia();
       } catch (err) { avisarError(err); }
     });
 
     async function historial() {
       const filas = await API.get('/compras');
-      $('historial').innerHTML = filas.map((c) => `<tr><td>${c.id_compra}</td><td>${fecha(c.fecha)}</td><td>${esc(c.proveedor)}</td>
+      $('historial').innerHTML = filas.map((c) => `<tr><td>${c.folio}</td><td>${fecha(c.fecha)}</td><td>${esc(c.proveedor)}</td>
         <td>${esc(c.folio_proveedor || '')}</td><td class="text-end">${c.productos}</td><td class="money">${dinero(c.total)}</td><td>${esc(c.registro)}</td></tr>`).join('')
         || '<tr><td colspan="7" class="text-center text-muted py-3">Sin compras registradas</td></tr>';
     }
 
+    let sugeridos = [];
+    async function sugerencia() {
+      sugeridos = await API.get('/compras/sugerencia');
+      const grupos = {};
+      sugeridos.forEach((p, i) => { (grupos[p.proveedor] ||= { id: p.id_proveedor, filas: [] }).filas.push({ ...p, i }); });
+      $('sugerencia').innerHTML = Object.keys(grupos).length ? Object.entries(grupos).map(([prov, g]) => `
+        <div class="mb-3">
+          <div class="d-flex align-items-center mb-1"><strong>${esc(prov)}</strong>
+            <button class="btn btn-sm btn-outline-success ms-auto" data-cargar="${esc(prov)}"><i class="bi bi-cart-plus"></i> Cargar en la compra</button></div>
+          <table class="table table-sm mb-0"><thead><tr><th>Código</th><th>Producto</th><th class="text-end">Existencia</th>
+            <th class="text-end">Mínimo</th><th class="text-end">Sugerido</th><th class="money">Último costo</th></tr></thead>
+          <tbody>${g.filas.map((p) => `<tr><td><code>${esc(p.codigo)}</code></td><td>${esc(p.nombre)}</td>
+            <td class="text-end text-danger">${p.existencia}</td><td class="text-end">${p.existencia_minima}</td>
+            <td class="text-end fw-bold">${p.sugerido}</td><td class="money">${dinero(p.costo)}</td></tr>`).join('')}</tbody></table>
+        </div>`).join('')
+        : '<p class="text-success mb-0"><i class="bi bi-check-circle"></i> Todos los productos están arriba de su existencia mínima.</p>';
+    }
+    $('sugerencia').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-cargar]');
+      if (!b) return;
+      const filas = sugeridos.filter((p) => p.proveedor === b.dataset.cargar);
+      if (filas[0].id_proveedor) $('proveedor').value = filas[0].id_proveedor;
+      for (const p of filas) {
+        if (partidas.some((x) => x.id_producto === p.id_producto)) continue;
+        partidas.push({ id_producto: p.id_producto, codigo: p.codigo, nombre: p.nombre, cantidad: Number(p.sugerido), costo_unitario: Number(p.costo) });
+      }
+      pintar();
+      avisar('Productos cargados: revisa cantidades y costos antes de registrar', 'info');
+    });
+
     (async () => {
+      sugerencia();
       const provs = await API.get('/proveedores');
       $('proveedor').innerHTML = '<option value="">Selecciona...</option>' + provs.map((p) => `<option value="${p.id_proveedor}">${esc(p.nombre)}</option>`).join('');
       pintar(); historial();

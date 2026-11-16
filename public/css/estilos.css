@@ -2,6 +2,10 @@
 body { background: #f5f7fa; }
 .navbar { background: var(--crcasa); }
 .navbar .nav-link.active { font-weight: 600; border-bottom: 2px solid #fff; }
+.navbar .nav-link, .navbar .navbar-text { white-space: nowrap; }
+.navbar .navbar-nav .nav-link { padding-left: .55rem; padding-right: .55rem; }
+.navbar .papeleria-actual { max-width: 210px; overflow: hidden; text-overflow: ellipsis; }
+@media (min-width: 1200px) and (max-width: 1450px) { .navbar { font-size: .92rem; } }
 .form-box { max-width: 420px; }
 .card { border: 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
 .table td, .table th { vertical-align: middle; }
@@ -20,4 +24,12 @@ body { background: #f5f7fa; }
   .no-print { display: none !important; }
   body { background: #fff; }
   .nota { padding: 0; }
+}
+
+/* Al imprimir un comprobante en ventana (corte de caja), solo sale el comprobante */
+@media print {
+  body.modal-open > main, body.modal-open > #nav { display: none !important; }
+  body.modal-open .modal { position: static; display: block !important; }
+  body.modal-open .modal-dialog { max-width: 100%; margin: 0; }
+  .modal-backdrop { display: none !important; }
 }

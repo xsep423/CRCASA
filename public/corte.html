@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRCASA | Corte de caja</title>
+  <link href="/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/vendor/icons/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/estilos.css" rel="stylesheet">
+</head>
+<body>
+  <div id="nav"></div>
+  <main class="container py-4">
+    <h1 class="h4 mb-1">Corte de caja</h1>
+    <p class="text-muted no-print">Al cerrar tu turno, cuenta el efectivo de la caja. El sistema lo compara con lo que debería haber:
+      el fondo con el que empezaste más tus ventas en efectivo.</p>
+
+    <div class="row g-3">
+      <div class="col-lg-7">
+        <div class="card"><div class="card-body" id="turno">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <h2 class="h6 text-muted mb-0">Tu turno actual</h2><small class="text-muted" id="t-periodo"></small>
+          </div>
+          <div class="row text-center g-2 mb-1">
+            <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">Ventas</div><div class="fs-4 fw-bold" id="t-ventas">0</div></div></div>
+            <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">Efectivo</div><div class="fs-5 fw-bold money text-center" id="t-efectivo">$0</div></div></div>
+            <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">Tarjeta</div><div class="fs-5 fw-bold money text-center" id="t-tarjeta">$0</div></div></div>
+            <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">Transferencia</div><div class="fs-5 fw-bold money text-center" id="t-transferencia">$0</div></div></div>
+          </div>
+          <p class="small text-muted mb-0" id="t-canceladas"></p>
+        </div></div>
+      </div>
+
+      <div class="col-lg-5">
+        <form class="card no-print" id="form-corte"><div class="card-body">
+          <h2 class="h6 text-muted mb-3">Cerrar turno</h2>
+          <div class="mb-2"><label class="form-label">Fondo inicial (con cuánto abriste la caja)</label>
+            <input name="fondo_inicial" type="number" min="0" step="0.5" class="form-control text-end" value="0"></div>
+          <div class="mb-2"><label class="form-label">Efectivo contado en caja *</label>
+            <input name="efectivo_contado" type="number" min="0" step="0.5" class="form-control text-end" required></div>
+          <div class="d-flex justify-content-between"><span>Efectivo esperado</span><strong class="money" id="esperado">$0.00</strong></div>
+          <div class="d-flex justify-content-between mb-2"><span>Diferencia</span><strong class="money" id="diferencia">—</strong></div>
+          <div class="mb-3"><label class="form-label">Notas</label><input name="notas" class="form-control" maxlength="255" placeholder="Ej. se pagó un garrafón de agua con caja"></div>
+          <button class="btn btn-primary w-100"><i class="bi bi-lock"></i> Registrar corte</button>
+        </div></form>
+      </div>
+    </div>
+
+    <h2 class="h5 mt-4" id="titulo-historial">Cortes anteriores</h2>
+    <div class="card"><div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light"><tr><th>Folio</th><th>Empleado</th><th>Turno</th><th class="text-end">Ventas</th><th class="money">Efectivo</th>
+          <th class="money">Tarjeta</th><th class="money">Transf.</th><th class="money">Esperado</th><th class="money">Contado</th><th class="money">Diferencia</th><th></th></tr></thead>
+        <tbody id="historial"></tbody>
+      </table>
+    </div></div>
+  </main>
+
+  <!-- Comprobante imprimible del corte -->
+  <div class="modal fade" id="modal-corte" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+    <div class="modal-body nota" id="comprobante"></div>
+    <div class="modal-footer no-print"><button class="btn btn-outline-primary" onclick="window.print()"><i class="bi bi-printer"></i> Imprimir</button>
+      <button class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button></div>
+  </div></div></div>
+
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    const yo = requerirSesion();
+    const $ = (id) => document.getElementById(id);
+    const form = $('form-corte');
+    const modal = new bootstrap.Modal($('modal-corte'));
+    let turno = null, cortes = [];
+
+    const signo = (n) => (n > 0 ? `<span class="text-success">+${dinero(n)} sobra</span>` : n < 0 ? `<span class="text-danger">${dinero(n)} falta</span>` : '<span class="text-success">Cuadra exacto</span>');
+
+    function calcular() {
+      if (!turno) return;
+      const esperado = Number(form.fondo_inicial.value || 0) + turno.ventas_efectivo;
+      $('esperado').textContent = dinero(esperado);
+      $('diferencia').innerHTML = form.efectivo_contado.value === '' ? '—' : signo(Math.round((Number(form.efectivo_contado.value) - esperado) * 100) / 100);
+    }
+
+    async function cargarTurno() {
+      turno = await API.get('/cortes/actual');
+      $('t-periodo').textContent = `Desde ${fecha(turno.desde)}`;
+      $('t-ventas').textContent = turno.num_ventas;
+      $('t-efectivo').textContent = dinero(turno.ventas_efectivo);
+      $('t-tarjeta').textContent = dinero(turno.ventas_tarjeta);
+      $('t-transferencia').textContent = dinero(turno.ventas_transferencia);
+      $('t-canceladas').textContent = turno.canceladas ? `${turno.canceladas} venta(s) cancelada(s) en el turno, no se cuentan.` : '';
+      calcular();
+    }
+
+    function comprobante(c) {
+      $('comprobante').innerHTML = `
+        <h2 class="h5 mb-0" style="color:var(--crcasa)">${esc(yo.papeleria || '')}</h2>
+        <div class="d-flex justify-content-between border-bottom pb-2 mb-2"><span>Corte de caja <strong>folio ${c.folio}</strong></span><small>${fecha(c.hasta)}</small></div>
+        <p class="mb-2"><strong>Empleado:</strong> ${esc(c.empleado)}<br><strong>Turno:</strong> ${fecha(c.desde)} a ${fecha(c.hasta)}</p>
+        ${[['Ventas registradas', c.num_ventas], ['Ventas canceladas', c.canceladas]].map(([a, b]) => `<div class="d-flex justify-content-between"><span>${a}</span><span>${b}</span></div>`).join('')}
+        <hr class="my-2">
+        ${[['Efectivo', c.ventas_efectivo], ['Tarjeta', c.ventas_tarjeta], ['Transferencia', c.ventas_transferencia]].map(([a, b]) => `<div class="d-flex justify-content-between"><span>Ventas con ${a.toLowerCase()}</span><span class="money">${dinero(b)}</span></div>`).join('')}
+        <hr class="my-2">
+        <div class="d-flex justify-content-between"><span>Fondo inicial</span><span class="money">${dinero(c.fondo_inicial)}</span></div>
+        <div class="d-flex justify-content-between"><span>Efectivo esperado</span><span class="money">${dinero(c.efectivo_esperado)}</span></div>
+        <div class="d-flex justify-content-between"><span>Efectivo contado</span><span class="money">${dinero(c.efectivo_contado)}</span></div>
+        <div class="d-flex justify-content-between fw-bold fs-5 border-top mt-1 pt-1"><span>Diferencia</span><span class="money">${signo(Number(c.diferencia))}</span></div>
+        ${c.notas ? `<p class="small mt-2 mb-0"><strong>Notas:</strong> ${esc(c.notas)}</p>` : ''}
+        <p class="small text-muted mt-4 mb-0">Firma del empleado: ______________________ &nbsp; Recibió: ______________________</p>`;
+      modal.show();
+    }
+
+    async function historial() {
+      cortes = await API.get('/cortes');
+      $('titulo-historial').textContent = ES_ADMIN() ? 'Cortes de la papelería' : 'Mis cortes anteriores';
+      $('historial').innerHTML = cortes.map((c, i) => `<tr><td><strong>${c.folio}</strong></td><td>${esc(c.empleado)}</td>
+        <td class="small">${fecha(c.desde)}<br>${fecha(c.hasta)}</td><td class="text-end">${c.num_ventas}</td>
+        <td class="money">${dinero(c.ventas_efectivo)}</td><td class="money">${dinero(c.ventas_tarjeta)}</td><td class="money">${dinero(c.ventas_transferencia)}</td>
+        <td class="money">${dinero(c.efectivo_esperado)}</td><td class="money">${dinero(c.efectivo_contado)}</td>
+        <td class="money fw-bold ${Number(c.diferencia) < 0 ? 'text-danger' : 'text-success'}">${dinero(c.diferencia)}</td>
+        <td><button class="btn btn-sm btn-outline-secondary" data-ver="${i}" title="Ver / imprimir"><i class="bi bi-printer"></i></button></td></tr>`).join('')
+        || '<tr><td colspan="11" class="text-center text-muted py-3">Sin cortes registrados</td></tr>';
+    }
+
+    form.addEventListener('input', calcular);
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!confirm('¿Registrar el corte? Tu turno se cierra y el siguiente empieza en cero.')) return;
+      try {
+        const r = await API.post('/cortes', Object.fromEntries(new FormData(form)));
+        avisar(r.mensaje);
+        form.efectivo_contado.value = ''; form.notas.value = '';
+        comprobante(r.corte);
+        cargarTurno(); historial();
+      } catch (err) { avisarError(err); }
+    });
+    $('historial').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-ver]');
+      if (b) comprobante(cortes[b.dataset.ver]);
+    });
+
+    Promise.all([cargarTurno(), historial()]).catch(avisarError);
+  </script>
+</body>
+</html>

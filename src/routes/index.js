@@ -11,6 +11,8 @@ const cotizaciones = require('../controllers/cotizaciones.controller');
 const ventas = require('../controllers/ventas.controller');
 const compras = require('../controllers/compras.controller');
 const admin = require('../controllers/admin.controller');
+const cortes = require('../controllers/cortes.controller');
+const reportes = require('../controllers/reportes.controller');
 
 const todos = permitirRoles(...ROLES.TODOS);
 const soloAdmin = permitirRoles(...ROLES.ADMIN);
@@ -21,6 +23,7 @@ router.post('/auth/login', m(auth.login));
 router.use(verificarToken); // a partir de aquí, todo requiere token
 router.get('/auth/perfil', auth.perfil);
 router.post('/auth/papeleria', soloSoporte, m(auth.cambiarPapeleria));
+router.post('/auth/password', m(auth.cambiarPassword));
 
 // ---------- Papelerías y usuarios (solo soporte técnico, ve todas las papelerías) ----------
 router.get('/papelerias', soloSoporte, m(admin.papelerias.listar));
@@ -38,6 +41,7 @@ router.get('/papeleria', todos, m(admin.papelerias.actual));
 router.get('/productos', todos, m(productos.listar));
 router.get('/productos/codigo/:codigo', todos, m(productos.porCodigo));
 router.get('/productos/:id', todos, m(productos.obtener));
+router.get('/productos/:id/movimientos', todos, m(productos.movimientos));
 router.post('/productos', soloAdmin, m(productos.crear));
 router.put('/productos/:id', soloAdmin, m(productos.actualizar));
 router.delete('/productos/:id', soloAdmin, m(productos.eliminar));
@@ -80,6 +84,7 @@ router.post('/ventas/:id/cancelar', soloAdmin, m(ventas.cancelar));
 
 // ---------- Compras a proveedores (suman existencia) ----------
 router.get('/compras', soloAdmin, m(compras.listar));
+router.get('/compras/sugerencia', soloAdmin, m(compras.sugerencia));
 router.get('/compras/:id', soloAdmin, m(compras.obtener));
 router.post('/compras', soloAdmin, m(compras.crear));
 
@@ -87,5 +92,13 @@ router.post('/compras', soloAdmin, m(compras.crear));
 router.get('/configuracion', todos, m(admin.configuracion.obtener));
 router.put('/configuracion', soloAdmin, m(admin.configuracion.actualizar));
 router.get('/resumen', soloAdmin, m(admin.resumen));
+router.get('/reportes/ventas', soloAdmin, m(reportes.ventas));
+router.get('/bitacora', soloAdmin, m(reportes.bitacora));
+
+// ---------- Corte de caja (cada empleado cierra su turno) ----------
+router.get('/cortes/actual', todos, m(cortes.actual));
+router.get('/cortes', todos, m(cortes.listar));
+router.get('/cortes/:id', todos, m(cortes.obtener));
+router.post('/cortes', todos, m(cortes.crear));
 
 module.exports = router;

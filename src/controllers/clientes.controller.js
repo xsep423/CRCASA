@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const { HttpError } = require('../utils/http');
 const { esAdmin, pid } = require('../middleware/auth');
+const { bitacora } = require('../services/registro');
 
 const CAMPOS = 'id_cliente, codigo, nombre, telefono, email, rfc, direccion, porcentaje_descuento';
 
@@ -60,6 +61,7 @@ async function crear(req, res) {
     `INSERT INTO clientes (id_papeleria, codigo, nombre, telefono, email, rfc, direccion, porcentaje_descuento)
      VALUES (?,?,?,?,?,?,?,?)`,
     [pid(req), codigo, nombre.trim(), telefono || null, email || null, rfc ? rfc.toUpperCase() : null, direccion || null, pct]);
+  if (pct > 0) await bitacora(req.usuario, 'Asignar descuento', `Cliente ${codigo}: ${pct}%`);
   res.status(201).json({ mensaje: 'Cliente registrado', id: r.insertId, codigo });
 }
 
@@ -79,6 +81,9 @@ async function actualizar(req, res) {
     `UPDATE clientes SET nombre=?, telefono=?, email=?, rfc=?, direccion=?, porcentaje_descuento=?
      WHERE id_cliente = ? AND id_papeleria = ?`,
     [nombre.trim(), telefono || null, email || null, rfc ? rfc.toUpperCase() : null, direccion || null, pct, req.params.id, pid(req)]);
+  if (Number(pct) !== Number(actual[0].porcentaje_descuento)) {
+    await bitacora(req.usuario, 'Cambiar descuento', `Cliente ${actual[0].codigo}: ${Number(actual[0].porcentaje_descuento)}% → ${Number(pct)}%`);
+  }
   res.json({ mensaje: 'Cliente actualizado' });
 }
 

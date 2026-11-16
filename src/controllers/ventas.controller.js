@@ -3,6 +3,8 @@ const pool = require('../config/db');
 const { HttpError } = require('../utils/http');
 const calc = require('../services/calculos');
 const { pid } = require('../middleware/auth');
+const { siguienteFolio, movimiento, bitacora } = require('../services/registro');
+const { redondear } = require('../utils/http');
 
 const METODOS = ['efectivo', 'tarjeta', 'transferencia'];
 const ENTREGAS = ['mostrador', 'recoger'];
@@ -33,29 +35,42 @@ async function registrarVenta(conn, opts) {
   const t = calc.totales(lineas, pct);
   const estado = entrega === 'recoger' ? 'pendiente_entrega' : 'pagada';
 
+  // Cobro en efectivo: si el capturista anota con cuánto pagó el cliente, se calcula el cambio
+  let pagoCon = null;
+  let cambio = null;
+  if (metodo === 'efectivo' && opts.pago_con !== undefined && opts.pago_con !== null && opts.pago_con !== '') {
+    pagoCon = Number(opts.pago_con);
+    if (isNaN(pagoCon) || pagoCon < t.total) throw new HttpError(400, `El pago (${pagoCon}) no cubre el total de la venta (${t.total})`);
+    cambio = redondear(pagoCon - t.total);
+  }
+
+  const folio = await siguienteFolio(conn, idPap, 'venta');
   const [r] = await conn.query(
-    `INSERT INTO ventas (id_papeleria, id_cliente, id_usuario, id_cotizacion, subtotal, porcentaje_descuento, descuento, total,
-                         metodo_pago, tipo_entrega, estado)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-    [idPap, cliente.id_cliente, usuario.id, id_cotizacion, t.subtotal, t.porcentaje_descuento, t.descuento, t.total,
-      metodo, entrega, estado]);
+    `INSERT INTO ventas (id_papeleria, folio, id_cliente, id_usuario, id_cotizacion, subtotal, porcentaje_descuento, descuento, total,
+                         metodo_pago, pago_con, cambio, tipo_entrega, estado)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [idPap, folio, cliente.id_cliente, usuario.id, id_cotizacion, t.subtotal, t.porcentaje_descuento, t.descuento, t.total,
+      metodo, pagoCon, cambio, entrega, estado]);
   await conn.query(
     'INSERT INTO detalle_venta (id_venta, id_producto, cantidad, precio_unitario, importe) VALUES ?',
     [lineas.map((l) => [r.insertId, l.id_producto, l.cantidad, l.precio_unitario, l.importe])]);
   for (const l of lineas) {
     await conn.query('UPDATE productos SET existencia = existencia - ? WHERE id_producto = ?', [l.cantidad, l.id_producto]);
+    await movimiento(conn, { idPapeleria: idPap, idProducto: l.id_producto, tipo: 'venta', cantidad: -l.cantidad,
+      referencia: `Venta ${folio}`, idUsuario: usuario.id });
   }
   return r.insertId;
 }
 
 async function detalle(conn, idPap, id) {
   const [cab] = await conn.query(
-    `SELECT v.*, c.codigo AS codigo_cliente, c.nombre AS cliente, c.rfc AS rfc_cliente, u.nombre AS vendio,
+    `SELECT v.*, co.folio AS folio_cotizacion, c.codigo AS codigo_cliente, c.nombre AS cliente, c.rfc AS rfc_cliente, u.nombre AS vendio,
             sf.id_solicitud
      FROM ventas v
      JOIN clientes c ON c.id_cliente = v.id_cliente
      JOIN usuarios u ON u.id_usuario = v.id_usuario
      LEFT JOIN solicitudes_factura sf ON sf.id_venta = v.id_venta
+     LEFT JOIN cotizaciones co ON co.id_cotizacion = v.id_cotizacion
      WHERE v.id_venta = ? AND v.id_papeleria = ?`, [id, idPap]);
   if (!cab.length) throw new HttpError(404, 'Venta no encontrada');
   const [partidas] = await conn.query(
@@ -68,16 +83,18 @@ async function detalle(conn, idPap, id) {
 // GET /api/ventas?estado=&desde=&hasta=&buscar=
 async function listar(req, res) {
   const { estado, desde, hasta, buscar } = req.query;
-  let sql = `SELECT v.id_venta, v.fecha, v.total, v.porcentaje_descuento, v.metodo_pago, v.tipo_entrega, v.estado,
+  let sql = `SELECT v.id_venta, v.folio, co.folio AS folio_cotizacion, v.fecha, v.total, v.porcentaje_descuento, v.metodo_pago, v.tipo_entrega, v.estado,
                     v.id_cotizacion, c.codigo AS codigo_cliente, c.nombre AS cliente, u.nombre AS vendio
              FROM ventas v
              JOIN clientes c ON c.id_cliente = v.id_cliente
-             JOIN usuarios u ON u.id_usuario = v.id_usuario WHERE v.id_papeleria = ?`;
+             JOIN usuarios u ON u.id_usuario = v.id_usuario
+             LEFT JOIN cotizaciones co ON co.id_cotizacion = v.id_cotizacion
+             WHERE v.id_papeleria = ?`;
   const params = [pid(req)];
   if (estado) { sql += ' AND v.estado = ?'; params.push(estado); }
   if (desde) { sql += ' AND DATE(v.fecha) >= ?'; params.push(desde); }
   if (hasta) { sql += ' AND DATE(v.fecha) <= ?'; params.push(hasta); }
-  if (buscar) { sql += ' AND (c.nombre LIKE ? OR c.codigo LIKE ? OR v.id_venta = ?)'; params.push(`%${buscar}%`, `${buscar}%`, Number(buscar) || 0); }
+  if (buscar) { sql += ' AND (c.nombre LIKE ? OR c.codigo LIKE ? OR v.folio = ?)'; params.push(`%${buscar}%`, `${buscar}%`, Number(buscar) || 0); }
   sql += ' ORDER BY v.id_venta DESC LIMIT 200';
   const [rows] = await pool.query(sql, params);
   res.json(rows);
@@ -106,7 +123,7 @@ async function entregar(req, res) {
 async function cancelar(req, res) {
   await pool.transaccion(async (conn) => {
     const [rows] = await conn.query(
-      `SELECT v.estado, sf.id_solicitud FROM ventas v LEFT JOIN solicitudes_factura sf ON sf.id_venta = v.id_venta
+      `SELECT v.estado, v.folio, sf.id_solicitud FROM ventas v LEFT JOIN solicitudes_factura sf ON sf.id_venta = v.id_venta
        WHERE v.id_venta = ? AND v.id_papeleria = ? FOR UPDATE`, [req.params.id, pid(req)]);
     if (!rows.length) throw new HttpError(404, 'Venta no encontrada');
     if (rows[0].estado === 'cancelada') throw new HttpError(409, 'La venta ya estaba cancelada');
@@ -114,8 +131,11 @@ async function cancelar(req, res) {
     const [partidas] = await conn.query('SELECT id_producto, cantidad FROM detalle_venta WHERE id_venta = ?', [req.params.id]);
     for (const p of partidas) {
       await conn.query('UPDATE productos SET existencia = existencia + ? WHERE id_producto = ?', [p.cantidad, p.id_producto]);
+      await movimiento(conn, { idPapeleria: pid(req), idProducto: p.id_producto, tipo: 'cancelacion', cantidad: p.cantidad,
+        referencia: `Cancelación venta ${rows[0].folio}`, idUsuario: req.usuario.id });
     }
     await conn.query("UPDATE ventas SET estado = 'cancelada' WHERE id_venta = ?", [req.params.id]);
+    await bitacora(req.usuario, 'Cancelar venta', `Venta ${rows[0].folio}`, { conn });
   });
   res.json({ mensaje: 'Venta cancelada y existencia devuelta' });
 }
@@ -133,6 +153,7 @@ async function solicitarFactura(req, res) {
   const [r] = await pool.query(
     'INSERT INTO solicitudes_factura (id_venta, rfc, razon_social, uso_cfdi, id_usuario) VALUES (?,?,?,?,?)',
     [venta.id_venta, rfc, req.body.razon_social || venta.cliente, req.body.uso_cfdi || 'G03', req.usuario.id]);
+  await bitacora(req.usuario, 'Solicitud de factura', `Venta ${venta.folio} · RFC ${rfc}`);
   res.status(201).json({ mensaje: 'Solicitud de factura registrada', id_solicitud: r.insertId });
 }
 
