@@ -1,6 +1,6 @@
 :root { --crcasa: #1f4e79; }
 body { background: #f5f7fa; }
-.navbar { background: var(--crcasa); }
+.navbar { background: var(--crcasa); position: relative; z-index: 1030; } /* encima de las tarjetas "sticky" para que los menús desplegables no queden tapados */
 .navbar .nav-link.active { font-weight: 600; border-bottom: 2px solid #fff; }
 .navbar .nav-link, .navbar .navbar-text { white-space: nowrap; }
 .navbar .navbar-nav .nav-link { padding-left: .55rem; padding-right: .55rem; }
