@@ -112,7 +112,19 @@ test('venta directa: el capturista ajusta el descuento hasta el tope', async () 
   assert.equal(await existencia(prodB), 8);
 });
 
-test('pedido para recoger, cancelación (solo admin) y factura', async () => {
+test('cotización vencida: queda cancelada con su motivo, no se borra', async () => {
+  const r = await api('capturista', 'POST', '/cotizaciones', { id_cliente: cliente.id_cliente, partidas: [{ id_producto: prodB, cantidad: 1 }] });
+  const id = r.data.cotizacion.id_cotizacion;
+  await pool.query('UPDATE cotizaciones SET vigencia = DATE_SUB(CURDATE(), INTERVAL 1 DAY) WHERE id_cotizacion = ?', [id]);
+  const c = (await api('capturista', 'GET', `/cotizaciones/${id}`)).data;
+  assert.equal(c.estado, 'cancelada');
+  assert.match(c.motivo_cancelacion, /vigencia/);
+  assert.equal((await api('capturista', 'PUT', `/cotizaciones/${id}`, { partidas: [{ id_producto: prodB, cantidad: 2 }] })).status, 409);
+  const lista = (await api('capturista', 'GET', '/cotizaciones?estado=cancelada')).data;
+  assert.ok(lista.some((x) => x.id_cotizacion === id));
+});
+
+test('pedido para recoger, cancelación (solo admin) y solicitud de factura', async () => {
   const r = await api('capturista', 'POST', '/ventas', {
     id_cliente: cliente.id_cliente, tipo_entrega: 'recoger', partidas: [{ id_producto: prodB, cantidad: 3 }],
   });
@@ -123,11 +135,11 @@ test('pedido para recoger, cancelación (solo admin) y factura', async () => {
   assert.equal((await api('administrador', 'POST', `/ventas/${id}/cancelar`)).status, 200);
   assert.equal(await existencia(prodB), 8); // regresó la mercancía
 
-  // factura: el cliente necesita RFC
+  // solicitud de factura: el cliente necesita RFC
   const v2 = (await api('capturista', 'POST', '/ventas', { id_cliente: cliente.id_cliente, partidas: [{ id_producto: prodB, cantidad: 1 }] })).data.venta;
-  assert.equal((await api('capturista', 'POST', `/ventas/${v2.id_venta}/factura`, {})).status, 400);
-  assert.equal((await api('capturista', 'POST', `/ventas/${v2.id_venta}/factura`, { rfc: 'XAXX010101000' })).status, 201);
-  assert.equal((await api('capturista', 'POST', `/ventas/${v2.id_venta}/factura`, { rfc: 'XAXX010101000' })).status, 409);
+  assert.equal((await api('capturista', 'POST', `/ventas/${v2.id_venta}/solicitud-factura`, {})).status, 400);
+  assert.equal((await api('capturista', 'POST', `/ventas/${v2.id_venta}/solicitud-factura`, { rfc: 'XAXX010101000' })).status, 201);
+  assert.equal((await api('capturista', 'POST', `/ventas/${v2.id_venta}/solicitud-factura`, { rfc: 'XAXX010101000' })).status, 409);
 });
 
 test('compra a proveedor suma existencia y actualiza costo', async () => {

@@ -6,9 +6,13 @@ const { HttpError } = require('../utils/http');
 const calc = require('../services/calculos');
 const { registrarVenta } = require('./ventas.controller');
 
-// Marca como vencidas las que ya pasaron su fecha de vigencia
+// Una cotización NUNCA se borra. Si pasa su fecha de vigencia sin convertirse en venta,
+// queda como cancelada (con el motivo) y sigue apareciendo en el historial.
+const VENCIDA = 'Venció su vigencia sin convertirse en venta';
 const actualizarVencidas = (conn = pool) =>
-  conn.query("UPDATE cotizaciones SET estado = 'vencida' WHERE estado = 'vigente' AND vigencia < CURDATE()");
+  conn.query(
+    "UPDATE cotizaciones SET estado = 'cancelada', motivo_cancelacion = ? WHERE estado = 'vigente' AND vigencia < CURDATE()",
+    [VENCIDA]);
 
 async function detalle(conn, id) {
   const [cab] = await conn.query(
@@ -31,7 +35,7 @@ async function detalle(conn, id) {
 async function listar(req, res) {
   await actualizarVencidas();
   const { estado, buscar } = req.query;
-  let sql = `SELECT co.id_cotizacion, co.fecha, co.vigencia, co.total, co.estado, co.porcentaje_descuento,
+  let sql = `SELECT co.id_cotizacion, co.fecha, co.vigencia, co.total, co.estado, co.motivo_cancelacion, co.porcentaje_descuento,
                     c.codigo AS codigo_cliente, c.nombre AS cliente, u.nombre AS capturo,
                     (SELECT COUNT(*) FROM detalle_cotizacion d WHERE d.id_cotizacion = co.id_cotizacion) AS productos
              FROM cotizaciones co
@@ -113,11 +117,13 @@ async function actualizar(req, res) {
   res.json({ mensaje: 'Cotización actualizada', cotizacion: await detalle(pool, req.params.id) });
 }
 
-// POST /api/cotizaciones/:id/cancelar
+// POST /api/cotizaciones/:id/cancelar  { motivo? } — no se borra, solo cambia de estado
 async function cancelar(req, res) {
   await pool.transaccion(async (conn) => {
     await vigenteParaEditar(conn, req.params.id);
-    await conn.query("UPDATE cotizaciones SET estado = 'cancelada' WHERE id_cotizacion = ?", [req.params.id]);
+    const motivo = String(req.body?.motivo || 'Cancelada por el capturista').slice(0, 120);
+    await conn.query("UPDATE cotizaciones SET estado = 'cancelada', motivo_cancelacion = ? WHERE id_cotizacion = ?",
+      [motivo, req.params.id]);
   });
   res.json({ mensaje: 'Cotización cancelada' });
 }

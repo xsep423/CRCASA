@@ -62,7 +62,7 @@ router.get('/ventas', todos, m(ventas.listar));
 router.get('/ventas/:id', todos, m(ventas.obtener));
 router.post('/ventas', todos, m(ventas.crear));
 router.post('/ventas/:id/entregar', todos, m(ventas.entregar));
-router.post('/ventas/:id/factura', todos, m(ventas.facturar));
+router.post('/ventas/:id/solicitud-factura', todos, m(ventas.solicitarFactura));
 router.post('/ventas/:id/cancelar', soloAdmin, m(ventas.cancelar));
 
 // ---------- Compras a proveedores (suman existencia) ----------

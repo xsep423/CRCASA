@@ -34,7 +34,7 @@
   </main>
 
   <div class="modal fade" id="modal-factura" tabindex="-1"><div class="modal-dialog"><form class="modal-content" id="form-factura">
-    <div class="modal-header"><h5 class="modal-title">Factura de la venta #<span id="fac-folio"></span></h5>
+    <div class="modal-header"><h5 class="modal-title">Solicitud de factura · venta #<span id="fac-folio"></span></h5>
       <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
       <div class="mb-2"><label class="form-label">RFC del cliente *</label><input name="rfc" class="form-control text-uppercase" maxlength="13" required></div>
@@ -42,10 +42,10 @@
       <div class="mb-2"><label class="form-label">Uso de CFDI</label><select name="uso_cfdi" class="form-select">
         <option value="G03">G03 · Gastos en general</option><option value="G01">G01 · Adquisición de mercancías</option>
         <option value="S01">S01 · Sin efectos fiscales</option></select></div>
-      <p class="form-text mb-0">La factura se registra en el sistema; el timbrado ante el SAT queda fuera del alcance del proyecto.</p>
+      <p class="form-text mb-0">El sistema guarda los datos fiscales del cliente. La factura (CFDI) se emite y timbra fuera del sistema, en el portal del SAT o con el PAC de la papelería.</p>
     </div>
     <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-      <button class="btn btn-primary">Registrar factura</button></div>
+      <button class="btn btn-primary">Guardar solicitud</button></div>
   </form></div></div>
 
   <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
@@ -69,7 +69,7 @@
           <td class="text-end text-nowrap">
             <a class="btn btn-sm btn-outline-secondary" href="/nota.html?tipo=venta&id=${v.id_venta}" target="_blank" title="Ver / imprimir"><i class="bi bi-printer"></i></a>
             ${v.estado === 'pendiente_entrega' ? `<button class="btn btn-sm btn-warning" data-entregar="${i}" title="Marcar como entregado"><i class="bi bi-bag-check"></i></button>` : ''}
-            ${v.estado !== 'cancelada' && v.codigo_cliente !== 'PG' ? `<button class="btn btn-sm btn-outline-primary" data-factura="${i}" title="Factura"><i class="bi bi-file-earmark-ruled"></i></button>` : ''}
+            ${v.estado !== 'cancelada' && v.codigo_cliente !== 'PG' ? `<button class="btn btn-sm btn-outline-primary" data-factura="${i}" title="Solicitar factura"><i class="bi bi-file-earmark-ruled"></i></button>` : ''}
             ${v.estado !== 'cancelada' && ES_ADMIN() ? `<button class="btn btn-sm btn-outline-danger" data-cancelar="${i}" title="Cancelar venta"><i class="bi bi-x-lg"></i></button>` : ''}
           </td></tr>`).join('') || '<tr><td colspan="9" class="text-center text-muted py-4">Sin ventas</td></tr>';
         $('suma').textContent = dinero(filas.filter((v) => v.estado !== 'cancelada').reduce((s, v) => s + Number(v.total), 0));
@@ -85,7 +85,7 @@
           avisar((await API.post(`/ventas/${v.id_venta}/entregar`)).mensaje); cargar();
         } else if (b.dataset.factura !== undefined) {
           const d = await API.get(`/ventas/${v.id_venta}`);
-          if (d.id_factura) return avisar(`Esta venta ya tiene la factura #${d.id_factura}`, 'info');
+          if (d.id_solicitud) return avisar(`Esta venta ya tiene la solicitud de factura #${d.id_solicitud}`, 'info');
           actual = d;
           $('fac-folio').textContent = d.id_venta;
           $('form-factura').rfc.value = d.rfc_cliente || '';
@@ -101,9 +101,9 @@
     $('form-factura').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
-        const r = await API.post(`/ventas/${actual.id_venta}/factura`, Object.fromEntries(new FormData(e.target)));
+        const r = await API.post(`/ventas/${actual.id_venta}/solicitud-factura`, Object.fromEntries(new FormData(e.target)));
         modalFac.hide();
-        avisar(`${r.mensaje} (#${r.id_factura})`);
+        avisar(`${r.mensaje} (#${r.id_solicitud})`);
       } catch (err) { avisarError(err); }
     });
 

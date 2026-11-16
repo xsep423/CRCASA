@@ -87,7 +87,7 @@ const fecha = (f) => (f ? new Date(f.replace(' ', 'T')).toLocaleString('es-MX', 
 const fechaCorta = (f) => (f ? new Date(f.slice(0, 10) + 'T12:00').toLocaleDateString('es-MX') : '');
 
 const ESTADOS = {
-  vigente: ['Vigente', 'primary'], convertida: ['Convertida en venta', 'success'], vencida: ['Vencida', 'secondary'],
+  vigente: ['Vigente', 'primary'], convertida: ['Convertida en venta', 'success'],
   cancelada: ['Cancelada', 'danger'], pagada: ['Pagada', 'success'], pendiente_entrega: ['Pendiente de entrega', 'warning'],
   entregada: ['Entregada', 'success'],
 };

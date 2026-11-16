@@ -16,13 +16,14 @@ Sistema web de punto de venta y control de inventario para una papelería de art
 | **Venta** | Operación con un cliente | **Resta** existencia |
 | **Compra** | Operación con un proveedor | **Suma** existencia |
 | **Cotización** | Propuesta de precio para un cliente | **No afecta** |
-| **Factura** | Documento fiscal que se emite al cliente sobre una venta | — |
+| **Nota de venta** | Comprobante que imprime el sistema al registrar una venta (no es factura) | — |
+| **Solicitud de factura** | Datos fiscales del cliente para que la papelería emita el CFDI fuera del sistema (portal del SAT o PAC). Sin timbrado no hay factura | — |
 
 ## Roles
 
 | Rol | Quién es | Qué puede hacer |
 |---|---|---|
-| Capturista | Empleado de mostrador | Captura de ventas y cotizaciones, alta de clientes, consulta de productos, marcar pedidos entregados, registrar facturas, ajustar el descuento de una operación hasta el tope |
+| Capturista | Empleado de mostrador | Captura de ventas y cotizaciones, alta de clientes, consulta de productos, marcar pedidos entregados, registrar solicitudes de factura, ajustar el descuento de una operación hasta el tope |
 | Administrador | Dueño o encargado de la papelería | Todo lo anterior + productos, clasificaciones, proveedores, compras, asignar % de descuento a clientes, tope de descuento, cancelar ventas, panel de resumen |
 | Soporte técnico | Equipo de desarrollo | Todo + usuarios del sistema. Es el único que crea o desactiva empleados |
 
@@ -33,7 +34,7 @@ Sistema web de punto de venta y control de inventario para una papelería de art
 - **Cotizaciones:** tienen vigencia (15 días por defecto). Mientras estén vigentes se pueden editar: quitar, agregar o cambiar cantidades, y todo se recalcula. Los productos que ya estaban conservan el precio cotizado. No apartan mercancía.
 - **Convertir cotización en venta:** se valida la existencia; si falta algún producto, el sistema lista qué falta y el capturista decide si ajusta la cantidad o lo quita. Solo al convertirla se descuenta el inventario.
 - **Pedido para recoger:** se registra como venta con estado *pendiente de entrega* y se marca como *entregada* cuando el cliente pasa por él.
-- **Cancelar una venta** (solo administrador) regresa la mercancía a la existencia. Una venta facturada no se cancela.
+- **Cancelar una venta** (solo administrador) regresa la mercancía a la existencia. Una venta con solicitud de factura no se cancela desde el sistema.
 - La existencia de un producto solo cambia por ventas, compras y cancelaciones; no se edita a mano.
 
 ## Tecnologías
@@ -87,7 +88,7 @@ Abrir http://localhost:3000 · Probar conexión: http://localhost:3000/api/salud
 | Inicio de sesión (empleados) | `index.html` | Todos |
 | Captura de venta / cotización (carátula) | `venta.html` | Todos |
 | Cotizaciones | `cotizaciones.html` | Todos |
-| Ventas, pedidos para recoger y facturas | `ventas.html` | Todos (cancelar: admin) |
+| Ventas, pedidos para recoger y solicitudes de factura | `ventas.html` | Todos (cancelar: admin) |
 | Clientes | `clientes.html` | Todos (descuento y baja: admin) |
 | Productos | `productos.html` | Consulta todos, edición admin |
 | Compras a proveedores | `compras.html` | Admin |
@@ -112,7 +113,7 @@ Todo requiere `Authorization: Bearer <token>` excepto el login.
 | GET / POST / PUT | `/api/cotizaciones` | Todos |
 | POST | `/api/cotizaciones/:id/convertir` · `/api/cotizaciones/:id/cancelar` | Todos |
 | GET / POST | `/api/ventas` | Todos |
-| POST | `/api/ventas/:id/entregar` · `/api/ventas/:id/factura` | Todos |
+| POST | `/api/ventas/:id/entregar` · `/api/ventas/:id/solicitud-factura` | Todos |
 | POST | `/api/ventas/:id/cancelar` | Admin |
 | GET / POST | `/api/compras` | Admin |
 | GET / PUT | `/api/configuracion` | Consulta todos, cambio admin |
@@ -123,7 +124,8 @@ Todo requiere `Authorization: Bearer <token>` excepto el login.
 
 - Los clientes no tienen acceso al sistema ni compran en línea; no hay pago en línea ni envíos.
 - No se muestran imágenes de productos.
-- La factura se registra, pero no se timbra ante el SAT.
+- El sistema no emite facturas (CFDI): solo guarda la solicitud con los datos fiscales; el timbrado se hace en el portal del SAT o con un PAC.
+- Las cotizaciones nunca se borran: si vencen sin convertirse en venta, quedan como canceladas con su motivo.
 - La fidelidad no se calcula sola: el descuento lo asigna el administrador.
 - Una sola sucursal.
 

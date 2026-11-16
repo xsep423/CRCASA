@@ -50,7 +50,7 @@
             <div class="d-flex justify-content-between fs-5 fw-bold border-top mt-1 pt-1"><span>Total</span><span class="money">${dinero(d.total)}</span></div>
           </div>
           <p class="small text-muted mt-4 mb-0">${tipo === 'venta'
-            ? `Atendió: ${esc(d.vendio)}. Este documento no es una factura. Generado con el sistema CRCASA.`
+            ? `Atendió: ${esc(d.vendio)}. Nota de venta: no es un comprobante fiscal (CFDI). Generado con el sistema CRCASA.`
             : `Elaboró: ${esc(d.capturo)}. Precios sujetos a existencia al momento de la compra. Esta cotización no aparta mercancía. Generado con el sistema CRCASA.`}</p>`;
       } catch (err) {
         document.getElementById('nota').innerHTML = `<div class="alert alert-danger">${esc(err.message)}</div>`;

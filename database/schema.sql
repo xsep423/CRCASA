@@ -10,7 +10,9 @@ SET NAMES utf8mb4;
 --   VENTA     = sale mercancía hacia un cliente  -> RESTA existencia
 --   COMPRA    = entra mercancía de un proveedor  -> SUMA existencia
 --   COTIZACIÓN = propuesta de precio            -> NO afecta existencia
---   FACTURA   = documento fiscal sobre una venta, para el cliente
+--   NOTA DE VENTA = comprobante que entrega el sistema (no es factura)
+--   SOLICITUD DE FACTURA = datos fiscales del cliente para emitir el CFDI
+--     timbrado fuera del sistema (portal del SAT o un PAC)
 -- =========================================================
 DROP DATABASE IF EXISTS papeleria_crcasa;
 CREATE DATABASE papeleria_crcasa CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -99,7 +101,8 @@ CREATE TABLE cotizaciones (
   porcentaje_descuento DECIMAL(5,2)  NOT NULL DEFAULT 0,
   descuento            DECIMAL(10,2) NOT NULL DEFAULT 0,
   total                DECIMAL(10,2) NOT NULL,
-  estado               ENUM('vigente','convertida','vencida','cancelada') NOT NULL DEFAULT 'vigente',
+  estado               ENUM('vigente','convertida','cancelada') NOT NULL DEFAULT 'vigente',
+  motivo_cancelacion   VARCHAR(120),               -- la cotización nunca se borra; si vence, se cancela
   notas                VARCHAR(255),
   CONSTRAINT fk_cot_cliente FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente),
   CONSTRAINT fk_cot_usuario FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
@@ -170,17 +173,19 @@ CREATE TABLE detalle_compra (
   CONSTRAINT fk_dco_producto FOREIGN KEY (id_producto) REFERENCES productos(id_producto)
 );
 
--- ---------- FACTURAS (al cliente, sobre una venta) ----------
-CREATE TABLE facturas (
-  id_factura    INT AUTO_INCREMENT PRIMARY KEY,
-  id_venta      INT NOT NULL UNIQUE,               -- una venta se factura una sola vez
+-- ---------- SOLICITUDES DE FACTURA (datos fiscales del cliente sobre una venta) ----------
+-- El sistema NO timbra: sin timbrado no hay factura (CFDI). Aquí solo se guardan los
+-- datos para que la papelería emita el CFDI en el portal del SAT o con su PAC.
+CREATE TABLE solicitudes_factura (
+  id_solicitud  INT AUTO_INCREMENT PRIMARY KEY,
+  id_venta      INT NOT NULL UNIQUE,               -- una venta tiene a lo más una solicitud
   rfc           VARCHAR(13)  NOT NULL,
   razon_social  VARCHAR(150) NOT NULL,
   uso_cfdi      VARCHAR(5)   NOT NULL DEFAULT 'G03',
   fecha         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   id_usuario    INT NOT NULL,
-  CONSTRAINT fk_fac_venta FOREIGN KEY (id_venta) REFERENCES ventas(id_venta),
-  CONSTRAINT fk_fac_usuario FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
+  CONSTRAINT fk_sol_venta FOREIGN KEY (id_venta) REFERENCES ventas(id_venta),
+  CONSTRAINT fk_sol_usuario FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
 );
 
 CREATE INDEX idx_prod_nombre ON productos(nombre);
