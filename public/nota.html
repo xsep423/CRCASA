@@ -22,13 +22,14 @@
       const p = new URLSearchParams(location.search);
       const tipo = p.get('tipo') === 'cotizacion' ? 'cotizacion' : 'venta';
       try {
-        const d = await API.get(`/${tipo === 'venta' ? 'ventas' : 'cotizaciones'}/${p.get('id')}`);
+        const [d, pap] = await Promise.all([API.get(`/${tipo === 'venta' ? 'ventas' : 'cotizaciones'}/${p.get('id')}`), API.get('/papeleria')]);
         const folio = tipo === 'venta' ? d.id_venta : d.id_cotizacion;
         document.title = `CRCASA | ${tipo === 'venta' ? 'Nota de venta' : 'Cotización'} ${folio}`;
         document.getElementById('nota').innerHTML = `
           <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
-            <div><h1 class="h4 mb-0" style="color:var(--crcasa)">Papelería CRCASA</h1>
-              <small class="text-muted">Artículos escolares y de oficina · Tijuana, B.C.</small></div>
+            <div><h1 class="h4 mb-0" style="color:var(--crcasa)">${esc(pap.nombre || 'Papelería')}</h1>
+              <small class="text-muted">${esc(pap.giro || '')}</small>
+              <div class="small text-muted">${esc([pap.direccion, pap.telefono && 'Tel. ' + pap.telefono].filter(Boolean).join(' · '))}</div></div>
             <div class="text-end"><h2 class="h5 mb-0">${tipo === 'venta' ? 'Nota de venta' : 'Cotización'}</h2>
               <div>Folio <strong>${folio}</strong></div><small>${fecha(d.fecha)}</small>
               <div>${badgeEstado(d.estado)}</div></div>
@@ -50,8 +51,8 @@
             <div class="d-flex justify-content-between fs-5 fw-bold border-top mt-1 pt-1"><span>Total</span><span class="money">${dinero(d.total)}</span></div>
           </div>
           <p class="small text-muted mt-4 mb-0">${tipo === 'venta'
-            ? `Atendió: ${esc(d.vendio)}. Este documento no es una factura.`
-            : `Elaboró: ${esc(d.capturo)}. Precios sujetos a existencia al momento de la compra. Esta cotización no aparta mercancía.`}</p>`;
+            ? `Atendió: ${esc(d.vendio)}. Nota de venta: no es un comprobante fiscal (CFDI). Generado con el sistema CRCASA.`
+            : `Elaboró: ${esc(d.capturo)}. Precios sujetos a existencia al momento de la compra. Esta cotización no aparta mercancía. Generado con el sistema CRCASA.`}</p>`;
       } catch (err) {
         document.getElementById('nota').innerHTML = `<div class="alert alert-danger">${esc(err.message)}</div>`;
       }

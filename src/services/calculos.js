@@ -1,15 +1,17 @@
 // Lógica compartida por ventas y cotizaciones: partidas, totales y descuento.
+// Todo se busca DENTRO de la papelería del empleado (idPapeleria).
 const { HttpError, redondear } = require('../utils/http');
 
-async function leerConfig(conn, clave, porDefecto) {
-  const [rows] = await conn.query('SELECT valor FROM configuracion WHERE clave = ?', [clave]);
+async function leerConfig(conn, idPapeleria, clave, porDefecto) {
+  const [rows] = await conn.query('SELECT valor FROM configuracion WHERE id_papeleria = ? AND clave = ?', [idPapeleria, clave]);
   return rows.length ? Number(rows[0].valor) : porDefecto;
 }
 
-async function obtenerCliente(conn, idCliente) {
+async function obtenerCliente(conn, idPapeleria, idCliente) {
   const [rows] = await conn.query(
-    'SELECT id_cliente, codigo, nombre, rfc, porcentaje_descuento FROM clientes WHERE id_cliente = ? AND activo = 1',
-    [idCliente]
+    `SELECT id_cliente, id_papeleria, codigo, nombre, rfc, porcentaje_descuento FROM clientes
+     WHERE id_cliente = ? AND id_papeleria = ? AND activo = 1`,
+    [idCliente, idPapeleria]
   );
   if (!rows.length) throw new HttpError(400, 'El cliente no existe o está dado de baja');
   return rows[0];
@@ -33,13 +35,13 @@ function normalizarPartidas(partidas) {
 
 // Trae precio y existencia actuales de cada producto.
 // bloquear = true usa SELECT ... FOR UPDATE (dentro de una transacción de venta).
-async function armarPartidas(conn, partidas, { bloquear = false } = {}) {
+async function armarPartidas(conn, idPapeleria, partidas, { bloquear = false } = {}) {
   const lista = normalizarPartidas(partidas);
   const ids = lista.map((p) => p.id_producto);
   const [productos] = await conn.query(
     `SELECT id_producto, codigo, nombre, precio_venta, existencia
-     FROM productos WHERE activo = 1 AND id_producto IN (?) ${bloquear ? 'FOR UPDATE' : ''}`,
-    [ids]
+     FROM productos WHERE activo = 1 AND id_papeleria = ? AND id_producto IN (?) ${bloquear ? 'FOR UPDATE' : ''}`,
+    [idPapeleria, ids]
   );
   const porId = new Map(productos.map((p) => [p.id_producto, p]));
   return lista.map((p) => {
@@ -77,7 +79,7 @@ async function resolverDescuento(conn, cliente, porcentajeSolicitado) {
     return asignado;
   }
   const pct = Number(porcentajeSolicitado);
-  const tope = await leerConfig(conn, 'tope_descuento', 15);
+  const tope = await leerConfig(conn, cliente.id_papeleria, 'tope_descuento', 15);
   const maximo = Math.max(tope, asignado);
   if (isNaN(pct) || pct < 0 || pct > maximo) {
     throw new HttpError(400, `El descuento debe estar entre 0% y ${maximo}%`);

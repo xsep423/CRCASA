@@ -20,10 +20,14 @@
   <script>
     requerirSesion(['soporte']);
     // USUARIOS = empleados que usan el sistema. Solo soporte técnico los administra.
+    // Cada empleado pertenece a una papelería; soporte técnico atiende a todas.
+    (async () => {
+    const paps = await API.get('/papelerias');
     Catalogo({
       contenedor: '#catalogo', endpoint: '/usuarios', id: 'id_usuario', nombre: 'usuario', textoNuevo: 'Nuevo usuario', buscar: false,
       columnas: [
         { campo: 'nombre', titulo: 'Nombre' }, { campo: 'usuario', titulo: 'Usuario', formato: (v) => `<code>${esc(v)}</code>` },
+        { campo: 'papeleria', titulo: 'Papelería', formato: (v, f) => f.rol === 'soporte' ? '<span class="text-muted">Todas</span>' : esc(v) },
         { campo: 'rol', titulo: 'Rol', formato: (v) => ETIQUETA_ROL[v] },
         { campo: 'activo', titulo: 'Estado', formato: (v) => v ? '<span class="badge text-bg-success">Activo</span>' : '<span class="badge text-bg-secondary">Inactivo</span>' },
       ],
@@ -32,10 +36,13 @@
         { campo: 'usuario', etiqueta: 'Usuario para iniciar sesión', requerido: true, soloAlCrear: true },
         { campo: 'rol', etiqueta: 'Rol', tipo: 'select', requerido: true, porDefecto: 'capturista',
           opciones: [['capturista', 'Capturista'], ['administrador', 'Administrador (dueño/encargado)'], ['soporte', 'Soporte técnico']] },
+        { campo: 'id_papeleria', etiqueta: 'Papelería', tipo: 'select', ayuda: 'Obligatoria para capturista y administrador. Soporte técnico atiende a todas.',
+          opciones: () => paps.filter((p) => p.activo).map((p) => [p.id_papeleria, p.nombre]) },
         { campo: 'activo', etiqueta: 'Estado', tipo: 'select', requerido: true, soloEditar: true, opciones: [[1, 'Activo'], [0, 'Inactivo']] },
         { campo: 'password', etiqueta: 'Contraseña', tipo: 'password', ayuda: 'Mínimo 8 caracteres. Al editar, déjala vacía para no cambiarla.' },
       ],
     });
+    })();
   </script>
 </body>
 </html>

@@ -20,7 +20,7 @@
       <div class="col-md-3">
         <select id="estado" class="form-select">
           <option value="vigente">Vigentes</option><option value="convertida">Convertidas en venta</option>
-          <option value="vencida">Vencidas</option><option value="cancelada">Canceladas</option><option value="">Todas</option>
+          <option value="cancelada">Canceladas</option><option value="">Todas</option>
         </select>
       </div>
     </div>
@@ -70,7 +70,7 @@
           <td><strong>${c.id_cotizacion}</strong></td><td>${fecha(c.fecha)}</td>
           <td>${esc(c.codigo_cliente)} · ${esc(c.cliente)}</td><td class="text-end">${c.productos}</td>
           <td class="text-end">${Number(c.porcentaje_descuento)}%</td><td class="money">${dinero(c.total)}</td>
-          <td>${fechaCorta(c.vigencia)}</td><td>${badgeEstado(c.estado)}</td>
+          <td>${fechaCorta(c.vigencia)}</td><td>${badgeEstado(c.estado)}${c.motivo_cancelacion ? `<br><small class="text-muted">${esc(c.motivo_cancelacion)}</small>` : ''}</td>
           <td class="text-end text-nowrap">
             <a class="btn btn-sm btn-outline-secondary" href="/nota.html?tipo=cotizacion&id=${c.id_cotizacion}" target="_blank" title="Ver / imprimir"><i class="bi bi-printer"></i></a>
             ${c.estado === 'vigente' ? `

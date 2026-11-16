@@ -49,6 +49,7 @@ const MENU = [
   { href: '/proveedores.html', texto: 'Proveedores', icono: 'building', roles: ['administrador', 'soporte'] },
   { href: '/panel.html', texto: 'Panel', icono: 'speedometer2', roles: ['administrador', 'soporte'] },
   { href: '/usuarios.html', texto: 'Usuarios', icono: 'person-gear', roles: ['soporte'] },
+  { href: '/papelerias.html', texto: 'Papelerías', icono: 'shop', roles: ['soporte'] },
 ];
 
 const ETIQUETA_ROL = { capturista: 'Capturista', administrador: 'Administrador', soporte: 'Soporte técnico' };
@@ -70,14 +71,32 @@ function requerirSesion(roles) {
           <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menu"><span class="navbar-toggler-icon"></span></button>
           <div class="collapse navbar-collapse" id="menu">
             <ul class="navbar-nav me-auto">${links}</ul>
+            ${u.rol === 'soporte'
+              ? `<select id="cambiar-papeleria" class="form-select form-select-sm me-3" style="max-width:240px" title="Papelería con la que trabajas">
+                   <option>${esc(u.papeleria || 'Selecciona papelería')}</option></select>`
+              : `<span class="navbar-text text-white me-3"><i class="bi bi-shop"></i> ${esc(u.papeleria || '')}</span>`}
             <span class="navbar-text text-white me-3"><i class="bi bi-person-circle"></i> ${esc(u.nombre)}
               <span class="badge bg-light text-dark">${ETIQUETA_ROL[u.rol]}</span></span>
             <button class="btn btn-outline-light btn-sm" onclick="API.cerrarSesion()">Salir</button>
           </div>
         </div>
       </nav>`;
+    if (u.rol === 'soporte') prepararCambioPapeleria(u);
   }
   return u;
+}
+
+// Soporte técnico atiende a todas las papelerías: elige con cuál trabajar
+async function prepararCambioPapeleria(u) {
+  const sel = document.getElementById('cambiar-papeleria');
+  try {
+    const lista = (await API.get('/papelerias')).filter((p) => p.activo);
+    sel.innerHTML = lista.map((p) => `<option value="${p.id_papeleria}" ${p.id_papeleria === u.id_papeleria ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('');
+    sel.addEventListener('change', async () => {
+      API.guardarSesion(await API.post('/auth/papeleria', { id_papeleria: Number(sel.value) }));
+      location.reload();
+    });
+  } catch (err) { avisarError(err); }
 }
 
 // ---------- Formato ----------
@@ -87,7 +106,7 @@ const fecha = (f) => (f ? new Date(f.replace(' ', 'T')).toLocaleString('es-MX', 
 const fechaCorta = (f) => (f ? new Date(f.slice(0, 10) + 'T12:00').toLocaleDateString('es-MX') : '');
 
 const ESTADOS = {
-  vigente: ['Vigente', 'primary'], convertida: ['Convertida en venta', 'success'], vencida: ['Vencida', 'secondary'],
+  vigente: ['Vigente', 'primary'], convertida: ['Convertida en venta', 'success'],
   cancelada: ['Cancelada', 'danger'], pagada: ['Pagada', 'success'], pendiente_entrega: ['Pendiente de entrega', 'warning'],
   entregada: ['Entregada', 'success'],
 };

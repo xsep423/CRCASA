@@ -1,7 +1,7 @@
 // Todas las rutas de la API. Todo requiere sesión de empleado salvo /auth/login.
 const router = require('express').Router();
 const { manejar: m } = require('../utils/http');
-const { ROLES, verificarToken, permitirRoles } = require('../middleware/auth');
+const { ROLES, verificarToken, permitirRoles, requierePapeleria } = require('../middleware/auth');
 
 const auth = require('../controllers/auth.controller');
 const productos = require('../controllers/productos.controller');
@@ -20,6 +20,19 @@ const soloSoporte = permitirRoles(...ROLES.SOPORTE);
 router.post('/auth/login', m(auth.login));
 router.use(verificarToken); // a partir de aquí, todo requiere token
 router.get('/auth/perfil', auth.perfil);
+router.post('/auth/papeleria', soloSoporte, m(auth.cambiarPapeleria));
+
+// ---------- Papelerías y usuarios (solo soporte técnico, ve todas las papelerías) ----------
+router.get('/papelerias', soloSoporte, m(admin.papelerias.listar));
+router.post('/papelerias', soloSoporte, m(admin.papelerias.crear));
+router.put('/papelerias/:id', soloSoporte, m(admin.papelerias.actualizar));
+router.get('/usuarios', soloSoporte, m(admin.usuarios.listar));
+router.post('/usuarios', soloSoporte, m(admin.usuarios.crear));
+router.put('/usuarios/:id', soloSoporte, m(admin.usuarios.actualizar));
+
+// A partir de aquí todo trabaja sobre la papelería del empleado
+router.use(requierePapeleria);
+router.get('/papeleria', todos, m(admin.papelerias.actual));
 
 // ---------- Productos ----------
 router.get('/productos', todos, m(productos.listar));
@@ -62,7 +75,7 @@ router.get('/ventas', todos, m(ventas.listar));
 router.get('/ventas/:id', todos, m(ventas.obtener));
 router.post('/ventas', todos, m(ventas.crear));
 router.post('/ventas/:id/entregar', todos, m(ventas.entregar));
-router.post('/ventas/:id/factura', todos, m(ventas.facturar));
+router.post('/ventas/:id/solicitud-factura', todos, m(ventas.solicitarFactura));
 router.post('/ventas/:id/cancelar', soloAdmin, m(ventas.cancelar));
 
 // ---------- Compras a proveedores (suman existencia) ----------
@@ -74,10 +87,5 @@ router.post('/compras', soloAdmin, m(compras.crear));
 router.get('/configuracion', todos, m(admin.configuracion.obtener));
 router.put('/configuracion', soloAdmin, m(admin.configuracion.actualizar));
 router.get('/resumen', soloAdmin, m(admin.resumen));
-
-// ---------- Usuarios / empleados (solo soporte técnico) ----------
-router.get('/usuarios', soloSoporte, m(admin.usuarios.listar));
-router.post('/usuarios', soloSoporte, m(admin.usuarios.crear));
-router.put('/usuarios/:id', soloSoporte, m(admin.usuarios.actualizar));
 
 module.exports = router;

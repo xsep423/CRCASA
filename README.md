@@ -1,6 +1,6 @@
 # CRCASA · Sistema de ventas e inventario para papelería
 
-Sistema web de punto de venta y control de inventario para una papelería de artículos escolares y de oficina. Lo usan los **empleados** de la papelería (principalmente el capturista en mostrador) para registrar ventas, elaborar cotizaciones, administrar clientes y registrar compras a proveedores. **Los clientes no entran al sistema.**
+Sistema web de punto de venta y control de inventario para papelerías de artículos escolares y de oficina. **Varias papelerías usan el mismo sistema**, cada una con sus propios productos, clientes, proveedores, ventas, reglas y empleados; ninguna ve los datos de las demás. Lo usan los **empleados** de la papelería (principalmente el capturista en mostrador) para registrar ventas, elaborar cotizaciones, administrar clientes y registrar compras a proveedores. **Los clientes no entran al sistema.**
 
 **Materia:** Programación Web (AEB-1055) · TecNM Campus Tijuana · Ago–Dic 2026
 **Equipo CRCASA:** Carretero Ocaña Kevin Isaac · Cruz Cárdenas Luis Ángel · Sánchez Sánchez Ximena Montserrat
@@ -10,21 +10,23 @@ Sistema web de punto de venta y control de inventario para una papelería de art
 
 | Término | Significado | Efecto en inventario |
 |---|---|---|
-| **Usuario** | Empleado que usa el sistema (capturista, administrador, soporte) | — |
+| **Papelería** | Cada negocio que usa el sistema (los datos de prueba traen 3) | — |
+| **Usuario** | Empleado de una papelería que usa el sistema (capturista, administrador, soporte) | — |
 | **Cliente** | A quien le vendemos. Está en el catálogo de clientes, no inicia sesión | — |
 | **Proveedor** | A quien le compramos mercancía | — |
 | **Venta** | Operación con un cliente | **Resta** existencia |
 | **Compra** | Operación con un proveedor | **Suma** existencia |
 | **Cotización** | Propuesta de precio para un cliente | **No afecta** |
-| **Factura** | Documento fiscal que se emite al cliente sobre una venta | — |
+| **Nota de venta** | Comprobante que imprime el sistema al registrar una venta (no es factura) | — |
+| **Solicitud de factura** | Datos fiscales del cliente para que la papelería emita el CFDI fuera del sistema (portal del SAT o PAC). Sin timbrado no hay factura | — |
 
 ## Roles
 
 | Rol | Quién es | Qué puede hacer |
 |---|---|---|
-| Capturista | Empleado de mostrador | Captura de ventas y cotizaciones, alta de clientes, consulta de productos, marcar pedidos entregados, registrar facturas, ajustar el descuento de una operación hasta el tope |
+| Capturista | Empleado de mostrador | Captura de ventas y cotizaciones, alta de clientes, consulta de productos, marcar pedidos entregados, registrar solicitudes de factura, ajustar el descuento de una operación hasta el tope |
 | Administrador | Dueño o encargado de la papelería | Todo lo anterior + productos, clasificaciones, proveedores, compras, asignar % de descuento a clientes, tope de descuento, cancelar ventas, panel de resumen |
-| Soporte técnico | Equipo de desarrollo | Todo + usuarios del sistema. Es el único que crea o desactiva empleados |
+| Soporte técnico | Equipo de desarrollo | Todo + papelerías y usuarios. Atiende a todas las papelerías y elige con cuál trabajar desde el menú. Es el único que da de alta papelerías y empleados |
 
 ## Reglas de negocio
 
@@ -33,7 +35,7 @@ Sistema web de punto de venta y control de inventario para una papelería de art
 - **Cotizaciones:** tienen vigencia (15 días por defecto). Mientras estén vigentes se pueden editar: quitar, agregar o cambiar cantidades, y todo se recalcula. Los productos que ya estaban conservan el precio cotizado. No apartan mercancía.
 - **Convertir cotización en venta:** se valida la existencia; si falta algún producto, el sistema lista qué falta y el capturista decide si ajusta la cantidad o lo quita. Solo al convertirla se descuenta el inventario.
 - **Pedido para recoger:** se registra como venta con estado *pendiente de entrega* y se marca como *entregada* cuando el cliente pasa por él.
-- **Cancelar una venta** (solo administrador) regresa la mercancía a la existencia. Una venta facturada no se cancela.
+- **Cancelar una venta** (solo administrador) regresa la mercancía a la existencia. Una venta con solicitud de factura no se cancela desde el sistema.
 - La existencia de un producto solo cambia por ventas, compras y cancelaciones; no se edita a mano.
 
 ## Tecnologías
@@ -71,14 +73,35 @@ cp .env.example .env          # pon tu usuario/contraseña de MySQL
 mysql -u root -p < database/schema.sql
 mysql -u root -p < database/seed.sql
 npm run crear-usuario -- soporte Soporte2026 soporte "Soporte CRCASA"
-npm run crear-usuario -- admin Admin2026x administrador "Dueño de la papelería"
-npm run crear-usuario -- caja1 Caja2026xx capturista "Capturista 1"
+# capturista y administrador llevan al final la papelería (1, 2 o 3)
+npm run crear-usuario -- admin1 Admin2026x administrador "Dueño El Estudiante" 1
+npm run crear-usuario -- caja1 Caja2026xx capturista "Capturista El Estudiante" 1
+npm run crear-usuario -- admin2 Admin2026x administrador "Dueño La Pluma" 2
+npm run crear-usuario -- admin3 Admin2026x administrador "Dueño Arcoíris" 3
 npm run dev
 ```
 
 Abrir http://localhost:3000 · Probar conexión: http://localhost:3000/api/salud · Pruebas: `npm test`
 
 > Ojo: `schema.sql` borra y vuelve a crear la base de datos `papeleria_crcasa`.
+
+## Despliegue en la nube (Vercel + TiDB Cloud)
+
+La app corre en **Vercel** (la API Express como función serverless y las pantallas como archivos estáticos) y la base de datos en **TiDB Cloud Serverless** (gratis y compatible con MySQL).
+
+1. **Base de datos.** En https://tidbcloud.com crea un cluster *Serverless* y en *Connect* copia host, puerto (4000), usuario y contraseña.
+2. **Cargar la base.** En tu computadora, pon esos datos en `.env` con `DB_SSL=true` y corre:
+   ```bash
+   npm run cargar-bd
+   npm run crear-usuario -- soporte <contraseña> soporte "Soporte CRCASA"
+   npm run crear-usuario -- admin1 <contraseña> administrador "Dueño El Estudiante" 1
+   ```
+   Después regresa tu `.env` a la base local.
+3. **Vercel.** En https://vercel.com → *Add New Project* → importa `xsep423/CRCASA`. Framework: *Other* (el `vercel.json` ya trae el build). En *Environment Variables* agrega:
+   `DB_HOST`, `DB_PORT=4000`, `DB_USER`, `DB_PASSWORD`, `DB_NAME=papeleria_crcasa`, `DB_SSL=true`, `DB_TIME_ZONE=America/Tijuana`, `JWT_SECRET` (cadena larga y aleatoria) y `JWT_EXPIRES=8h`.
+4. **Deploy.** Al terminar, abre `https://<tu-proyecto>.vercel.app/api/salud`; debe responder `{"ok":true,"bd":"conectada"}`.
+
+Cada push a `main` vuelve a desplegar solo.
 
 ## Pantallas
 
@@ -87,7 +110,8 @@ Abrir http://localhost:3000 · Probar conexión: http://localhost:3000/api/salud
 | Inicio de sesión (empleados) | `index.html` | Todos |
 | Captura de venta / cotización (carátula) | `venta.html` | Todos |
 | Cotizaciones | `cotizaciones.html` | Todos |
-| Ventas, pedidos para recoger y facturas | `ventas.html` | Todos (cancelar: admin) |
+| Ventas, pedidos para recoger y solicitudes de factura | `ventas.html` | Todos (cancelar: admin) |
+| Papelerías que usan el sistema | `papelerias.html` | Soporte |
 | Clientes | `clientes.html` | Todos (descuento y baja: admin) |
 | Productos | `productos.html` | Consulta todos, edición admin |
 | Compras a proveedores | `compras.html` | Admin |
@@ -112,7 +136,7 @@ Todo requiere `Authorization: Bearer <token>` excepto el login.
 | GET / POST / PUT | `/api/cotizaciones` | Todos |
 | POST | `/api/cotizaciones/:id/convertir` · `/api/cotizaciones/:id/cancelar` | Todos |
 | GET / POST | `/api/ventas` | Todos |
-| POST | `/api/ventas/:id/entregar` · `/api/ventas/:id/factura` | Todos |
+| POST | `/api/ventas/:id/entregar` · `/api/ventas/:id/solicitud-factura` | Todos |
 | POST | `/api/ventas/:id/cancelar` | Admin |
 | GET / POST | `/api/compras` | Admin |
 | GET / PUT | `/api/configuracion` | Consulta todos, cambio admin |
@@ -123,7 +147,8 @@ Todo requiere `Authorization: Bearer <token>` excepto el login.
 
 - Los clientes no tienen acceso al sistema ni compran en línea; no hay pago en línea ni envíos.
 - No se muestran imágenes de productos.
-- La factura se registra, pero no se timbra ante el SAT.
+- El sistema no emite facturas (CFDI): solo guarda la solicitud con los datos fiscales; el timbrado se hace en el portal del SAT o con un PAC.
+- Las cotizaciones nunca se borran: si vencen sin convertirse en venta, quedan como canceladas con su motivo.
 - La fidelidad no se calcula sola: el descuento lo asigna el administrador.
 - Una sola sucursal.
 
