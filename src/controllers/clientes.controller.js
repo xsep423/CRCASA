@@ -1,14 +1,14 @@
 const pool = require('../config/db');
 const { HttpError } = require('../utils/http');
-const { esAdmin } = require('../middleware/auth');
+const { esAdmin, pid } = require('../middleware/auth');
 
 const CAMPOS = 'id_cliente, codigo, nombre, telefono, email, rfc, direccion, porcentaje_descuento';
 
 // GET /api/clientes?buscar=
 async function listar(req, res) {
   const { buscar } = req.query;
-  let sql = `SELECT ${CAMPOS} FROM clientes WHERE activo = 1`;
-  const params = [];
+  let sql = `SELECT ${CAMPOS} FROM clientes WHERE activo = 1 AND id_papeleria = ?`;
+  const params = [pid(req)];
   if (buscar) { sql += ' AND (codigo LIKE ? OR nombre LIKE ? OR telefono LIKE ?)'; params.push(`${buscar}%`, `%${buscar}%`, `${buscar}%`); }
   sql += ' ORDER BY (codigo = "PG") DESC, nombre LIMIT 200';
   const [rows] = await pool.query(sql, params);
@@ -17,14 +17,15 @@ async function listar(req, res) {
 
 // GET /api/clientes/codigo/:codigo — lo usa la pantalla de captura para traer el descuento
 async function porCodigo(req, res) {
-  const [rows] = await pool.query(`SELECT ${CAMPOS} FROM clientes WHERE activo = 1 AND codigo = ?`,
-    [req.params.codigo.trim().toUpperCase()]);
+  const [rows] = await pool.query(`SELECT ${CAMPOS} FROM clientes WHERE activo = 1 AND id_papeleria = ? AND codigo = ?`,
+    [pid(req), req.params.codigo.trim().toUpperCase()]);
   if (!rows.length) throw new HttpError(404, 'No existe un cliente con ese código');
   res.json(rows[0]);
 }
 
 async function obtener(req, res) {
-  const [rows] = await pool.query(`SELECT ${CAMPOS} FROM clientes WHERE id_cliente = ? AND activo = 1`, [req.params.id]);
+  const [rows] = await pool.query(`SELECT ${CAMPOS} FROM clientes WHERE id_cliente = ? AND id_papeleria = ? AND activo = 1`,
+    [req.params.id, pid(req)]);
   if (!rows.length) throw new HttpError(404, 'Cliente no encontrado');
   res.json(rows[0]);
 }
@@ -41,9 +42,10 @@ function validar(body) {
 }
 
 // Código automático C-0001, C-0002... si no se captura uno
-async function siguienteCodigo() {
+async function siguienteCodigo(idPap) {
   const [rows] = await pool.query(
-    "SELECT MAX(CAST(SUBSTRING(codigo, 3) AS UNSIGNED)) AS n FROM clientes WHERE codigo REGEXP '^C-[0-9]+$'");
+    "SELECT MAX(CAST(SUBSTRING(codigo, 3) AS UNSIGNED)) AS n FROM clientes WHERE id_papeleria = ? AND codigo REGEXP '^C-[0-9]+$'",
+    [idPap]);
   return `C-${String((rows[0].n || 0) + 1).padStart(4, '0')}`;
 }
 
@@ -52,12 +54,12 @@ async function siguienteCodigo() {
 async function crear(req, res) {
   validar(req.body);
   const { nombre, telefono, email, rfc, direccion } = req.body;
-  const codigo = req.body.codigo ? String(req.body.codigo).trim().toUpperCase() : await siguienteCodigo();
+  const codigo = req.body.codigo ? String(req.body.codigo).trim().toUpperCase() : await siguienteCodigo(pid(req));
   const pct = esAdmin(req.usuario) ? Number(req.body.porcentaje_descuento || 0) : 0;
   const [r] = await pool.query(
-    `INSERT INTO clientes (codigo, nombre, telefono, email, rfc, direccion, porcentaje_descuento)
-     VALUES (?,?,?,?,?,?,?)`,
-    [codigo, nombre.trim(), telefono || null, email || null, rfc ? rfc.toUpperCase() : null, direccion || null, pct]);
+    `INSERT INTO clientes (id_papeleria, codigo, nombre, telefono, email, rfc, direccion, porcentaje_descuento)
+     VALUES (?,?,?,?,?,?,?,?)`,
+    [pid(req), codigo, nombre.trim(), telefono || null, email || null, rfc ? rfc.toUpperCase() : null, direccion || null, pct]);
   res.status(201).json({ mensaje: 'Cliente registrado', id: r.insertId, codigo });
 }
 
@@ -65,7 +67,8 @@ async function crear(req, res) {
 async function actualizar(req, res) {
   validar(req.body);
   const { nombre, telefono, email, rfc, direccion, porcentaje_descuento } = req.body;
-  const [actual] = await pool.query('SELECT codigo, porcentaje_descuento FROM clientes WHERE id_cliente = ? AND activo = 1', [req.params.id]);
+  const [actual] = await pool.query(
+    'SELECT codigo, porcentaje_descuento FROM clientes WHERE id_cliente = ? AND id_papeleria = ? AND activo = 1', [req.params.id, pid(req)]);
   if (!actual.length) throw new HttpError(404, 'Cliente no encontrado');
   if (actual[0].codigo === 'PG') throw new HttpError(400, 'El cliente "Público en general" no se modifica');
 
@@ -74,14 +77,15 @@ async function actualizar(req, res) {
     ? Number(porcentaje_descuento) : actual[0].porcentaje_descuento;
   await pool.query(
     `UPDATE clientes SET nombre=?, telefono=?, email=?, rfc=?, direccion=?, porcentaje_descuento=?
-     WHERE id_cliente = ?`,
-    [nombre.trim(), telefono || null, email || null, rfc ? rfc.toUpperCase() : null, direccion || null, pct, req.params.id]);
+     WHERE id_cliente = ? AND id_papeleria = ?`,
+    [nombre.trim(), telefono || null, email || null, rfc ? rfc.toUpperCase() : null, direccion || null, pct, req.params.id, pid(req)]);
   res.json({ mensaje: 'Cliente actualizado' });
 }
 
 // DELETE /api/clientes/:id (admin) — baja lógica
 async function eliminar(req, res) {
-  const [r] = await pool.query("UPDATE clientes SET activo = 0 WHERE id_cliente = ? AND codigo <> 'PG'", [req.params.id]);
+  const [r] = await pool.query("UPDATE clientes SET activo = 0 WHERE id_cliente = ? AND id_papeleria = ? AND codigo <> 'PG'",
+    [req.params.id, pid(req)]);
   if (!r.affectedRows) throw new HttpError(404, 'Cliente no encontrado');
   res.json({ mensaje: 'Cliente dado de baja' });
 }

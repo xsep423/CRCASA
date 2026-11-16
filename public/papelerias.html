@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRCASA | Papelerías</title>
+  <link href="/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/vendor/icons/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/css/estilos.css" rel="stylesheet">
+</head>
+<body>
+  <div id="nav"></div>
+  <main class="container py-4">
+    <h1 class="h4 mb-3">Papelerías</h1>
+    <p class="text-muted">Negocios que usan el sistema. Cada papelería tiene su propio catálogo, clientes, ventas, reglas y empleados.
+      Al registrar una nueva se crean sus reglas, su cliente “Público en general” y las clasificaciones base.</p>
+    <div id="catalogo"></div>
+  </main>
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    requerirSesion(['soporte']);
+    Catalogo({
+      contenedor: '#catalogo', endpoint: '/papelerias', id: 'id_papeleria', nombre: 'papelería', textoNuevo: 'Nueva papelería', buscar: false,
+      columnas: [
+        { campo: 'nombre', titulo: 'Nombre', formato: (v) => `<strong>${esc(v)}</strong>` },
+        { campo: 'giro', titulo: 'Giro' }, { campo: 'direccion', titulo: 'Dirección' }, { campo: 'telefono', titulo: 'Teléfono' },
+        { campo: 'empleados', titulo: 'Empleados', clase: 'text-end' },
+        { campo: 'activo', titulo: 'Estado', formato: (v) => v ? '<span class="badge text-bg-success">Activa</span>' : '<span class="badge text-bg-secondary">Dada de baja</span>' },
+      ],
+      campos: [
+        { campo: 'nombre', etiqueta: 'Nombre (aparece en la nota de venta)', requerido: true, col: 12 },
+        { campo: 'giro', etiqueta: 'Giro' }, { campo: 'telefono', etiqueta: 'Teléfono' },
+        { campo: 'direccion', etiqueta: 'Dirección', col: 8 }, { campo: 'rfc', etiqueta: 'RFC', col: 4 },
+        { campo: 'activo', etiqueta: 'Estado', tipo: 'select', requerido: true, soloEditar: true, opciones: [[1, 'Activa'], [0, 'Dada de baja']] },
+      ],
+    });
+  </script>
+</body>
+</html>

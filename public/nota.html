@@ -22,13 +22,14 @@
       const p = new URLSearchParams(location.search);
       const tipo = p.get('tipo') === 'cotizacion' ? 'cotizacion' : 'venta';
       try {
-        const d = await API.get(`/${tipo === 'venta' ? 'ventas' : 'cotizaciones'}/${p.get('id')}`);
+        const [d, pap] = await Promise.all([API.get(`/${tipo === 'venta' ? 'ventas' : 'cotizaciones'}/${p.get('id')}`), API.get('/papeleria')]);
         const folio = tipo === 'venta' ? d.id_venta : d.id_cotizacion;
         document.title = `CRCASA | ${tipo === 'venta' ? 'Nota de venta' : 'Cotización'} ${folio}`;
         document.getElementById('nota').innerHTML = `
           <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
-            <div><h1 class="h4 mb-0" style="color:var(--crcasa)">Papelería</h1>
-              <small class="text-muted">Artículos escolares y de oficina</small></div>
+            <div><h1 class="h4 mb-0" style="color:var(--crcasa)">${esc(pap.nombre || 'Papelería')}</h1>
+              <small class="text-muted">${esc(pap.giro || '')}</small>
+              <div class="small text-muted">${esc([pap.direccion, pap.telefono && 'Tel. ' + pap.telefono].filter(Boolean).join(' · '))}</div></div>
             <div class="text-end"><h2 class="h5 mb-0">${tipo === 'venta' ? 'Nota de venta' : 'Cotización'}</h2>
               <div>Folio <strong>${folio}</strong></div><small>${fecha(d.fecha)}</small>
               <div>${badgeEstado(d.estado)}</div></div>

@@ -1,6 +1,7 @@
 // COMPRAS: mercancía que entra de un PROVEEDOR -> suma existencia y actualiza el costo.
 const pool = require('../config/db');
 const { HttpError, redondear } = require('../utils/http');
+const { pid } = require('../middleware/auth');
 
 // GET /api/compras
 async function listar(req, res) {
@@ -10,7 +11,8 @@ async function listar(req, res) {
      FROM compras co
      JOIN proveedores pr ON pr.id_proveedor = co.id_proveedor
      JOIN usuarios u ON u.id_usuario = co.id_usuario
-     ORDER BY co.id_compra DESC LIMIT 200`);
+     WHERE co.id_papeleria = ?
+     ORDER BY co.id_compra DESC LIMIT 200`, [pid(req)]);
   res.json(rows);
 }
 
@@ -19,7 +21,7 @@ async function obtener(req, res) {
   const [cab] = await pool.query(
     `SELECT co.*, pr.nombre AS proveedor, u.nombre AS registro FROM compras co
      JOIN proveedores pr ON pr.id_proveedor = co.id_proveedor
-     JOIN usuarios u ON u.id_usuario = co.id_usuario WHERE co.id_compra = ?`, [req.params.id]);
+     JOIN usuarios u ON u.id_usuario = co.id_usuario WHERE co.id_compra = ? AND co.id_papeleria = ?`, [req.params.id, pid(req)]);
   if (!cab.length) throw new HttpError(404, 'Compra no encontrada');
   const [partidas] = await pool.query(
     `SELECT d.id_producto, p.codigo, p.nombre, d.cantidad, d.costo_unitario, d.importe
@@ -42,15 +44,16 @@ async function crear(req, res) {
   const total = redondear(lineas.reduce((s, l) => s + l.importe, 0));
 
   const id = await pool.transaccion(async (conn) => {
-    const [prov] = await conn.query('SELECT id_proveedor FROM proveedores WHERE id_proveedor = ? AND activo = 1', [id_proveedor]);
+    const [prov] = await conn.query('SELECT id_proveedor FROM proveedores WHERE id_proveedor = ? AND id_papeleria = ? AND activo = 1',
+      [id_proveedor, pid(req)]);
     if (!prov.length) throw new HttpError(400, 'El proveedor no existe');
     const [r] = await conn.query(
-      'INSERT INTO compras (id_proveedor, id_usuario, folio_proveedor, total) VALUES (?,?,?,?)',
-      [id_proveedor, req.usuario.id, folio_proveedor || null, total]);
+      'INSERT INTO compras (id_papeleria, id_proveedor, id_usuario, folio_proveedor, total) VALUES (?,?,?,?,?)',
+      [pid(req), id_proveedor, req.usuario.id, folio_proveedor || null, total]);
     for (const l of lineas) {
       const [u] = await conn.query(
-        'UPDATE productos SET existencia = existencia + ?, costo = ? WHERE id_producto = ? AND activo = 1',
-        [l.cantidad, l.costo, l.id_producto]);
+        'UPDATE productos SET existencia = existencia + ?, costo = ? WHERE id_producto = ? AND id_papeleria = ? AND activo = 1',
+        [l.cantidad, l.costo, l.id_producto, pid(req)]);
       if (!u.affectedRows) throw new HttpError(400, `El producto ${l.id_producto} no existe`);
       await conn.query(
         'INSERT INTO detalle_compra (id_compra, id_producto, cantidad, costo_unitario, importe) VALUES (?,?,?,?,?)',

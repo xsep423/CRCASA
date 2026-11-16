@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const { HttpError } = require('../utils/http');
+const { pid } = require('../middleware/auth');
 
 const SELECT = `SELECT p.id_producto, p.codigo, p.nombre, p.descripcion, p.precio_venta, p.costo,
                        p.existencia, p.existencia_minima, p.id_clasificacion, c.nombre AS clasificacion,
@@ -7,14 +8,14 @@ const SELECT = `SELECT p.id_producto, p.codigo, p.nombre, p.descripcion, p.preci
                 FROM productos p
                 JOIN clasificaciones c ON c.id_clasificacion = p.id_clasificacion
                 LEFT JOIN proveedores pr ON pr.id_proveedor = p.id_proveedor
-                WHERE p.activo = 1`;
+                WHERE p.activo = 1 AND p.id_papeleria = ?`;
 
 // GET /api/productos?buscar=&clasificacion=&bajo_minimo=1
 // "buscar" coincide con código o nombre, para que el capturista teclee lo que tenga a la mano.
 async function listar(req, res) {
   const { buscar, clasificacion, bajo_minimo } = req.query;
   let sql = SELECT;
-  const params = [];
+  const params = [pid(req)];
   if (buscar) { sql += ' AND (p.codigo LIKE ? OR p.nombre LIKE ?)'; params.push(`${buscar}%`, `%${buscar}%`); }
   if (clasificacion) { sql += ' AND p.id_clasificacion = ?'; params.push(clasificacion); }
   if (bajo_minimo) sql += ' AND p.existencia <= p.existencia_minima';
@@ -25,13 +26,13 @@ async function listar(req, res) {
 
 // GET /api/productos/codigo/:codigo  (lector de código de barras o tecleado)
 async function porCodigo(req, res) {
-  const [rows] = await pool.query(`${SELECT} AND p.codigo = ?`, [req.params.codigo.trim().toUpperCase()]);
+  const [rows] = await pool.query(`${SELECT} AND p.codigo = ?`, [pid(req), req.params.codigo.trim().toUpperCase()]);
   if (!rows.length) throw new HttpError(404, 'No existe un producto con ese código');
   res.json(rows[0]);
 }
 
 async function obtener(req, res) {
-  const [rows] = await pool.query(`${SELECT} AND p.id_producto = ?`, [req.params.id]);
+  const [rows] = await pool.query(`${SELECT} AND p.id_producto = ?`, [pid(req), req.params.id]);
   if (!rows.length) throw new HttpError(404, 'Producto no encontrado');
   res.json(rows[0]);
 }
@@ -48,16 +49,27 @@ function datos(body) {
     existencia_minima, id_clasificacion, id_proveedor || null];
 }
 
+// La clasificación y el proveedor deben ser de la misma papelería
+async function validarRelaciones(req, valores) {
+  const [c] = await pool.query('SELECT 1 FROM clasificaciones WHERE id_clasificacion = ? AND id_papeleria = ?', [valores[6], pid(req)]);
+  if (!c.length) throw new HttpError(400, 'La clasificación no existe');
+  if (valores[7]) {
+    const [p] = await pool.query('SELECT 1 FROM proveedores WHERE id_proveedor = ? AND id_papeleria = ? AND activo = 1', [valores[7], pid(req)]);
+    if (!p.length) throw new HttpError(400, 'El proveedor no existe');
+  }
+  return valores;
+}
+
 // POST /api/productos (admin)
 // La existencia inicial se captura solo al crear; después cambia únicamente con ventas y compras.
 async function crear(req, res) {
-  const valores = datos(req.body);
+  const valores = await validarRelaciones(req, datos(req.body));
   const existencia = Number(req.body.existencia || 0);
   if (!Number.isInteger(existencia) || existencia < 0) throw new HttpError(400, 'Existencia inicial inválida');
   const [r] = await pool.query(
     `INSERT INTO productos (codigo, nombre, descripcion, precio_venta, costo, existencia_minima,
-                            id_clasificacion, id_proveedor, existencia)
-     VALUES (?,?,?,?,?,?,?,?,?)`, [...valores, existencia]);
+                            id_clasificacion, id_proveedor, existencia, id_papeleria)
+     VALUES (?,?,?,?,?,?,?,?,?,?)`, [...valores, existencia, pid(req)]);
   res.status(201).json({ mensaje: 'Producto creado', id: r.insertId });
 }
 
@@ -66,14 +78,15 @@ async function actualizar(req, res) {
   const [r] = await pool.query(
     `UPDATE productos SET codigo=?, nombre=?, descripcion=?, precio_venta=?, costo=?, existencia_minima=?,
             id_clasificacion=?, id_proveedor=?
-     WHERE id_producto = ? AND activo = 1`, [...datos(req.body), req.params.id]);
+     WHERE id_producto = ? AND id_papeleria = ? AND activo = 1`,
+    [...(await validarRelaciones(req, datos(req.body))), req.params.id, pid(req)]);
   if (!r.affectedRows) throw new HttpError(404, 'Producto no encontrado');
   res.json({ mensaje: 'Producto actualizado' });
 }
 
 // DELETE /api/productos/:id (admin) — baja lógica para no romper ventas pasadas
 async function eliminar(req, res) {
-  const [r] = await pool.query('UPDATE productos SET activo = 0 WHERE id_producto = ?', [req.params.id]);
+  const [r] = await pool.query('UPDATE productos SET activo = 0 WHERE id_producto = ? AND id_papeleria = ?', [req.params.id, pid(req)]);
   if (!r.affectedRows) throw new HttpError(404, 'Producto no encontrado');
   res.json({ mensaje: 'Producto dado de baja' });
 }
