@@ -125,6 +125,7 @@ CREATE TABLE productos (
 CREATE TABLE cotizaciones (
   id_cotizacion        INT AUTO_INCREMENT PRIMARY KEY,
   id_papeleria         INT NOT NULL,
+  folio                INT NOT NULL,                -- consecutivo propio de cada papelería
   id_cliente           INT NOT NULL,
   id_usuario           INT NOT NULL,               -- empleado que la capturó
   fecha                TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -136,6 +137,7 @@ CREATE TABLE cotizaciones (
   estado               ENUM('vigente','convertida','cancelada') NOT NULL DEFAULT 'vigente',
   motivo_cancelacion   VARCHAR(120),               -- la cotización nunca se borra; si vence, se cancela
   notas                VARCHAR(255),
+  UNIQUE KEY uq_cot_folio (id_papeleria, folio),
   CONSTRAINT fk_cot_pap FOREIGN KEY (id_papeleria) REFERENCES papelerias(id_papeleria),
   CONSTRAINT fk_cot_cliente FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente),
   CONSTRAINT fk_cot_usuario FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
@@ -157,6 +159,7 @@ CREATE TABLE detalle_cotizacion (
 CREATE TABLE ventas (
   id_venta             INT AUTO_INCREMENT PRIMARY KEY,
   id_papeleria         INT NOT NULL,
+  folio                INT NOT NULL,                -- consecutivo propio de cada papelería
   id_cliente           INT NOT NULL,
   id_usuario           INT NOT NULL,               -- empleado que registró la venta
   id_cotizacion        INT NULL UNIQUE,            -- si viene de una cotización
@@ -166,8 +169,11 @@ CREATE TABLE ventas (
   descuento            DECIMAL(10,2) NOT NULL DEFAULT 0,
   total                DECIMAL(10,2) NOT NULL,
   metodo_pago          ENUM('efectivo','tarjeta','transferencia') NOT NULL DEFAULT 'efectivo',
+  pago_con             DECIMAL(10,2) NULL,          -- efectivo que entregó el cliente
+  cambio               DECIMAL(10,2) NULL,
   tipo_entrega         ENUM('mostrador','recoger') NOT NULL DEFAULT 'mostrador',
   estado               ENUM('pagada','pendiente_entrega','entregada','cancelada') NOT NULL DEFAULT 'pagada',
+  UNIQUE KEY uq_venta_folio (id_papeleria, folio),
   CONSTRAINT fk_venta_pap FOREIGN KEY (id_papeleria) REFERENCES papelerias(id_papeleria),
   CONSTRAINT fk_venta_cliente FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente),
   CONSTRAINT fk_venta_usuario FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario),
@@ -189,11 +195,13 @@ CREATE TABLE detalle_venta (
 CREATE TABLE compras (
   id_compra        INT AUTO_INCREMENT PRIMARY KEY,
   id_papeleria     INT NOT NULL,
+  folio            INT NOT NULL,                    -- consecutivo propio de cada papelería
   id_proveedor     INT NOT NULL,
   id_usuario       INT NOT NULL,
   folio_proveedor  VARCHAR(40),                    -- folio de la factura/nota del proveedor
   fecha            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   total            DECIMAL(10,2) NOT NULL,
+  UNIQUE KEY uq_compra_folio (id_papeleria, folio),
   CONSTRAINT fk_compra_pap FOREIGN KEY (id_papeleria) REFERENCES papelerias(id_papeleria),
   CONSTRAINT fk_compra_prov FOREIGN KEY (id_proveedor) REFERENCES proveedores(id_proveedor),
   CONSTRAINT fk_compra_usuario FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
@@ -225,6 +233,77 @@ CREATE TABLE solicitudes_factura (
   CONSTRAINT fk_sol_usuario FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
 ) /*T![auto_id_cache] AUTO_ID_CACHE=1 */;
 
+-- ---------- FOLIOS (último número usado por papelería y tipo de documento) ----------
+CREATE TABLE folios (
+  id_papeleria  INT NOT NULL,
+  tipo          VARCHAR(20) NOT NULL,              -- venta | cotizacion | compra | corte
+  ultimo        INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (id_papeleria, tipo),
+  CONSTRAINT fk_folio_pap FOREIGN KEY (id_papeleria) REFERENCES papelerias(id_papeleria)
+);
+
+-- ---------- KÁRDEX: cada entrada o salida de mercancía ----------
+CREATE TABLE movimientos_inventario (
+  id_movimiento   INT AUTO_INCREMENT PRIMARY KEY,
+  id_papeleria    INT NOT NULL,
+  id_producto     INT NOT NULL,
+  tipo            ENUM('inicial','venta','compra','cancelacion') NOT NULL,
+  cantidad        INT NOT NULL,                     -- positiva entra, negativa sale
+  existencia      INT NOT NULL,                     -- existencia que quedó después del movimiento
+  referencia      VARCHAR(40),                      -- ej. "Venta 12", "Compra 4"
+  id_usuario      INT NULL,
+  fecha           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_mov_pap FOREIGN KEY (id_papeleria) REFERENCES papelerias(id_papeleria),
+  CONSTRAINT fk_mov_prod FOREIGN KEY (id_producto) REFERENCES productos(id_producto),
+  CONSTRAINT fk_mov_usuario FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
+) /*T![auto_id_cache] AUTO_ID_CACHE=1 */;
+
+-- ---------- CORTES DE CAJA (cierre del turno de cada empleado) ----------
+CREATE TABLE cortes_caja (
+  id_corte              INT AUTO_INCREMENT PRIMARY KEY,
+  id_papeleria          INT NOT NULL,
+  folio                 INT NOT NULL,
+  id_usuario            INT NOT NULL,              -- empleado que cierra su turno
+  desde                 DATETIME NOT NULL,
+  hasta                 DATETIME NOT NULL,
+  num_ventas            INT NOT NULL DEFAULT 0,
+  ventas_efectivo       DECIMAL(10,2) NOT NULL DEFAULT 0,
+  ventas_tarjeta        DECIMAL(10,2) NOT NULL DEFAULT 0,
+  ventas_transferencia  DECIMAL(10,2) NOT NULL DEFAULT 0,
+  canceladas            INT NOT NULL DEFAULT 0,
+  fondo_inicial         DECIMAL(10,2) NOT NULL DEFAULT 0,
+  efectivo_esperado     DECIMAL(10,2) NOT NULL,    -- fondo + ventas en efectivo
+  efectivo_contado      DECIMAL(10,2) NOT NULL,
+  diferencia            DECIMAL(10,2) NOT NULL,    -- contado - esperado (negativo = falta)
+  notas                 VARCHAR(255),
+  UNIQUE KEY uq_corte_folio (id_papeleria, folio),
+  CONSTRAINT fk_corte_pap FOREIGN KEY (id_papeleria) REFERENCES papelerias(id_papeleria),
+  CONSTRAINT fk_corte_usuario FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
+) /*T![auto_id_cache] AUTO_ID_CACHE=1 */;
+
+-- ---------- BITÁCORA: quién hizo qué y cuándo ----------
+CREATE TABLE bitacora (
+  id_bitacora   INT AUTO_INCREMENT PRIMARY KEY,
+  id_papeleria  INT NULL,
+  id_usuario    INT NULL,
+  accion        VARCHAR(60) NOT NULL,
+  detalle       VARCHAR(255),
+  fecha         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_bit_usuario FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
+) /*T![auto_id_cache] AUTO_ID_CACHE=1 */;
+
+-- ---------- INTENTOS DE INICIO DE SESIÓN (para bloquear ataques de fuerza bruta) ----------
+CREATE TABLE intentos_login (
+  id_intento  INT AUTO_INCREMENT PRIMARY KEY,
+  usuario     VARCHAR(40) NOT NULL,
+  ip          VARCHAR(45),
+  exito       TINYINT(1) NOT NULL,
+  fecha       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) /*T![auto_id_cache] AUTO_ID_CACHE=1 */;
+
+CREATE INDEX idx_mov_producto ON movimientos_inventario(id_producto, fecha);
+CREATE INDEX idx_bit_fecha ON bitacora(id_papeleria, fecha);
+CREATE INDEX idx_intentos ON intentos_login(usuario, fecha);
 CREATE INDEX idx_prod_nombre ON productos(id_papeleria, nombre);
 CREATE INDEX idx_cli_nombre  ON clientes(id_papeleria, nombre);
 CREATE INDEX idx_venta_fecha ON ventas(id_papeleria, fecha);

@@ -6,6 +6,7 @@ const { HttpError } = require('../utils/http');
 const calc = require('../services/calculos');
 const { registrarVenta } = require('./ventas.controller');
 const { pid } = require('../middleware/auth');
+const { siguienteFolio, bitacora } = require('../services/registro');
 
 // Una cotización NUNCA se borra. Si pasa su fecha de vigencia sin convertirse en venta,
 // queda como cancelada (con el motivo) y sigue apareciendo en el historial.
@@ -18,7 +19,7 @@ const actualizarVencidas = (conn = pool) =>
 async function detalle(conn, idPap, id) {
   const [cab] = await conn.query(
     `SELECT co.*, c.codigo AS codigo_cliente, c.nombre AS cliente, u.nombre AS capturo,
-            v.id_venta
+            v.id_venta, v.folio AS folio_venta
      FROM cotizaciones co
      JOIN clientes c ON c.id_cliente = co.id_cliente
      JOIN usuarios u ON u.id_usuario = co.id_usuario
@@ -36,7 +37,7 @@ async function detalle(conn, idPap, id) {
 async function listar(req, res) {
   await actualizarVencidas();
   const { estado, buscar } = req.query;
-  let sql = `SELECT co.id_cotizacion, co.fecha, co.vigencia, co.total, co.estado, co.motivo_cancelacion, co.porcentaje_descuento,
+  let sql = `SELECT co.id_cotizacion, co.folio, co.fecha, co.vigencia, co.total, co.estado, co.motivo_cancelacion, co.porcentaje_descuento,
                     c.codigo AS codigo_cliente, c.nombre AS cliente, u.nombre AS capturo,
                     (SELECT COUNT(*) FROM detalle_cotizacion d WHERE d.id_cotizacion = co.id_cotizacion) AS productos
              FROM cotizaciones co
@@ -44,7 +45,7 @@ async function listar(req, res) {
              JOIN usuarios u ON u.id_usuario = co.id_usuario WHERE co.id_papeleria = ?`;
   const params = [pid(req)];
   if (estado) { sql += ' AND co.estado = ?'; params.push(estado); }
-  if (buscar) { sql += ' AND (c.nombre LIKE ? OR c.codigo LIKE ? OR co.id_cotizacion = ?)'; params.push(`%${buscar}%`, `${buscar}%`, Number(buscar) || 0); }
+  if (buscar) { sql += ' AND (c.nombre LIKE ? OR c.codigo LIKE ? OR co.folio = ?)'; params.push(`%${buscar}%`, `${buscar}%`, Number(buscar) || 0); }
   sql += ' ORDER BY co.id_cotizacion DESC LIMIT 200';
   const [rows] = await pool.query(sql, params);
   res.json(rows);
@@ -82,10 +83,11 @@ async function crear(req, res) {
     const cliente = await calc.obtenerCliente(conn, pid(req), req.body.id_cliente);
     const { lineas, t } = await calcular(conn, req.body, cliente);
     const dias = await calc.leerConfig(conn, pid(req), 'dias_vigencia_cotizacion', 15);
+    const folio = await siguienteFolio(conn, pid(req), 'cotizacion');
     const [r] = await conn.query(
-      `INSERT INTO cotizaciones (id_papeleria, id_cliente, id_usuario, vigencia, subtotal, porcentaje_descuento, descuento, total, notas)
-       VALUES (?,?,?, DATE_ADD(CURDATE(), INTERVAL ? DAY), ?,?,?,?,?)`,
-      [pid(req), cliente.id_cliente, req.usuario.id, dias, t.subtotal, t.porcentaje_descuento, t.descuento, t.total, req.body.notas || null]);
+      `INSERT INTO cotizaciones (id_papeleria, folio, id_cliente, id_usuario, vigencia, subtotal, porcentaje_descuento, descuento, total, notas)
+       VALUES (?,?,?,?, DATE_ADD(CURDATE(), INTERVAL ? DAY), ?,?,?,?,?)`,
+      [pid(req), folio, cliente.id_cliente, req.usuario.id, dias, t.subtotal, t.porcentaje_descuento, t.descuento, t.total, req.body.notas || null]);
     await guardarPartidas(conn, r.insertId, lineas);
     return r.insertId;
   });
@@ -121,10 +123,11 @@ async function actualizar(req, res) {
 // POST /api/cotizaciones/:id/cancelar  { motivo? } — no se borra, solo cambia de estado
 async function cancelar(req, res) {
   await pool.transaccion(async (conn) => {
-    await vigenteParaEditar(conn, pid(req), req.params.id);
+    const cot = await vigenteParaEditar(conn, pid(req), req.params.id);
     const motivo = String(req.body?.motivo || 'Cancelada por el capturista').slice(0, 120);
     await conn.query("UPDATE cotizaciones SET estado = 'cancelada', motivo_cancelacion = ? WHERE id_cotizacion = ?",
       [motivo, req.params.id]);
+    await bitacora(req.usuario, 'Cancelar cotización', `Cotización ${cot.folio}: ${motivo}`, { conn });
   });
   res.json({ mensaje: 'Cotización cancelada' });
 }
@@ -150,7 +153,8 @@ async function convertir(req, res) {
     await conn.query("UPDATE cotizaciones SET estado = 'convertida' WHERE id_cotizacion = ?", [cot.id_cotizacion]);
     return id;
   });
-  res.status(201).json({ mensaje: 'Cotización convertida en venta', id_venta: idVenta });
+  const [[v]] = await pool.query('SELECT folio FROM ventas WHERE id_venta = ?', [idVenta]);
+  res.status(201).json({ mensaje: 'Cotización convertida en venta', id_venta: idVenta, folio: v.folio });
 }
 
 module.exports = { listar, obtener, crear, actualizar, cancelar, convertir };

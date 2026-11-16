@@ -173,6 +173,8 @@ function pintar(actualizarInputPct = true) {
   $('t-subtotal').textContent = dinero(subtotal);
   $('t-descuento').textContent = '-' + dinero(descuento);
   $('t-total').textContent = dinero(subtotal - descuento);
+  estado.total = Math.round((subtotal - descuento) * 100) / 100;
+  actualizarCambio();
   if (actualizarInputPct) $('pct').value = estado.pct;
   $('pct').max = max;
   $('pct').classList.toggle('is-invalid', !pctValido);
@@ -181,6 +183,20 @@ function pintar(actualizarInputPct = true) {
     : '';
   $('faltantes').classList.add('d-none');
 }
+
+// ---------------- Cobro en efectivo ----------------
+function actualizarCambio() {
+  const efectivo = $('metodo').value === 'efectivo';
+  $('cobro').classList.toggle('d-none', !efectivo);
+  const pago = Number($('pago-con').value);
+  const cambio = pago - (estado.total || 0);
+  const el = $('t-cambio');
+  if (!$('pago-con').value) { el.textContent = dinero(0); el.className = 'fs-4 fw-bold money'; return; }
+  el.textContent = cambio >= 0 ? dinero(cambio) : `Faltan ${dinero(-cambio)}`;
+  el.className = `fs-4 fw-bold money ${cambio >= 0 ? 'text-success' : 'text-danger'}`;
+}
+$('pago-con').addEventListener('input', actualizarCambio);
+$('metodo').addEventListener('change', actualizarCambio);
 
 // ---------------- Guardar ----------------
 function cuerpo() {
@@ -212,20 +228,20 @@ function listo(titulo, detalle, url) {
 async function registrarVenta() {
   try {
     const body = { ...cuerpo(), metodo_pago: $('metodo').value, tipo_entrega: $('entrega').value };
-    let idVenta, total;
+    if (body.metodo_pago === 'efectivo' && $('pago-con').value) body.pago_con = Number($('pago-con').value);
+    let idVenta;
     if (estado.idCotizacion) {
       // Primero guarda los cambios de la cotización y luego la convierte
       await API.put(`/cotizaciones/${estado.idCotizacion}`, body);
       const r = await API.post(`/cotizaciones/${estado.idCotizacion}/convertir`, body);
       idVenta = r.id_venta;
-      total = (await API.get(`/ventas/${idVenta}`)).total;
     } else {
-      const r = await API.post('/ventas', body);
-      idVenta = r.venta.id_venta;
-      total = r.venta.total;
+      idVenta = (await API.post('/ventas', body)).venta.id_venta;
     }
+    const v = await API.get(`/ventas/${idVenta}`);
     const recoger = body.tipo_entrega === 'recoger';
-    listo(`Venta #${idVenta} registrada`, `Total ${dinero(total)}${recoger ? ' · Pedido pendiente de entrega' : ''}`,
+    listo(`Venta folio ${v.folio} registrada`,
+      `Total ${dinero(v.total)}${v.cambio !== null && v.cambio !== undefined ? ` · Pagó con ${dinero(v.pago_con)} · Cambio ${dinero(v.cambio)}` : ''}${recoger ? ' · Pedido pendiente de entrega' : ''}`,
       `/nota.html?tipo=venta&id=${idVenta}`);
   } catch (err) { mostrarFaltantes(err); }
 }
@@ -237,7 +253,7 @@ async function guardarCotizacion() {
       ? await API.put(`/cotizaciones/${estado.idCotizacion}`, body)
       : await API.post('/cotizaciones', body);
     const c = r.cotizacion;
-    listo(`Cotización #${c.id_cotizacion} ${estado.idCotizacion ? 'actualizada' : 'guardada'}`,
+    listo(`Cotización folio ${c.folio} ${estado.idCotizacion ? 'actualizada' : 'guardada'}`,
       `Total ${dinero(c.total)} · Vigente hasta ${fechaCorta(c.vigencia)}`, `/nota.html?tipo=cotizacion&id=${c.id_cotizacion}`);
   } catch (err) { avisarError(err); }
 }
@@ -246,6 +262,7 @@ function limpiar() {
   if (estado.idCotizacion) { location.href = '/venta.html'; return; }
   estado.partidas = [];
   $('metodo').value = 'efectivo';
+  $('pago-con').value = '';
   $('entrega').value = 'mostrador';
   cargarClientePorCodigo('PG');
 }
@@ -270,11 +287,11 @@ document.addEventListener('keydown', (e) => {
     if (id) {
       const c = await API.get(`/cotizaciones/${id}`);
       if (c.estado !== 'vigente') {
-        avisar(`La cotización #${id} está ${c.estado} y ya no se puede editar`, 'warning');
+        avisar(`La cotización folio ${c.folio} está ${c.estado} y ya no se puede editar`, 'warning');
         return cargarClientePorCodigo('PG');
       }
       estado.idCotizacion = c.id_cotizacion;
-      $('num-cot').textContent = c.id_cotizacion;
+      $('num-cot').textContent = c.folio;
       $('banner-cotizacion').classList.remove('d-none');
       $('btn-venta').querySelector('span').textContent = 'Convertir en venta';
       $('btn-cotizacion').querySelector('span').textContent = 'Guardar cambios';

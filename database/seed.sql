@@ -71,3 +71,7 @@ JOIN proveedores pr ON pr.id_papeleria = p.id_papeleria AND pr.nombre = t.provee
 ORDER BY p.id_papeleria, t.codigo;
 
 DROP TABLE tmp_catalogo;
+
+-- Existencia inicial de cada producto en el kárdex
+INSERT INTO movimientos_inventario (id_papeleria, id_producto, tipo, cantidad, existencia, referencia)
+SELECT id_papeleria, id_producto, 'inicial', existencia, existencia, 'Existencia inicial' FROM productos ORDER BY id_producto;

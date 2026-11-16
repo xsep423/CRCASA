@@ -23,7 +23,7 @@
       const tipo = p.get('tipo') === 'cotizacion' ? 'cotizacion' : 'venta';
       try {
         const [d, pap] = await Promise.all([API.get(`/${tipo === 'venta' ? 'ventas' : 'cotizaciones'}/${p.get('id')}`), API.get('/papeleria')]);
-        const folio = tipo === 'venta' ? d.id_venta : d.id_cotizacion;
+        const folio = d.folio;
         document.title = `CRCASA | ${tipo === 'venta' ? 'Nota de venta' : 'Cotización'} ${folio}`;
         document.getElementById('nota').innerHTML = `
           <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
@@ -49,6 +49,9 @@
             <div class="d-flex justify-content-between"><span>Subtotal</span><span class="money">${dinero(d.subtotal)}</span></div>
             <div class="d-flex justify-content-between"><span>Descuento (${Number(d.porcentaje_descuento)}%)</span><span class="money">-${dinero(d.descuento)}</span></div>
             <div class="d-flex justify-content-between fs-5 fw-bold border-top mt-1 pt-1"><span>Total</span><span class="money">${dinero(d.total)}</span></div>
+            ${d.pago_con !== null && d.pago_con !== undefined ? `
+            <div class="d-flex justify-content-between"><span>Pagó con</span><span class="money">${dinero(d.pago_con)}</span></div>
+            <div class="d-flex justify-content-between"><span>Cambio</span><span class="money">${dinero(d.cambio)}</span></div>` : ''}
           </div>
           <p class="small text-muted mt-4 mb-0">${tipo === 'venta'
             ? `Atendió: ${esc(d.vendio)}. Nota de venta: no es un comprobante fiscal (CFDI). Generado con el sistema CRCASA.`

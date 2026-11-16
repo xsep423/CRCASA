@@ -15,6 +15,16 @@
     <p class="text-muted">Los productos en rojo están en o debajo de su existencia mínima.</p>
     <div id="catalogo"></div>
   </main>
+
+  <!-- Kárdex: entradas y salidas del producto -->
+  <div class="modal fade" id="modal-kardex" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Kárdex · <span id="k-titulo"></span></h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <p class="small text-muted">Cada venta, compra y cancelación que movió la existencia de este producto, de la más reciente a la más antigua.</p>
+      <table class="table table-sm"><thead><tr><th>Fecha</th><th>Movimiento</th><th>Referencia</th><th class="text-end">Cantidad</th>
+        <th class="text-end">Existencia</th><th>Empleado</th></tr></thead><tbody id="k-filas"></tbody></table>
+    </div>
+  </div></div></div>
   <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
   <script src="/js/app.js"></script>
   <script>
@@ -36,6 +46,8 @@
           { campo: 'precio_venta', titulo: 'Precio', clase: 'money', formato: dinero },
           { campo: 'existencia', titulo: 'Existencia', clase: 'text-end',
             formato: (v, f) => v <= f.existencia_minima ? `<span class="badge text-bg-danger" title="En o debajo del mínimo (${f.existencia_minima})">${v}</span>` : v },
+          { campo: 'id_producto', titulo: '', clase: 'text-end',
+            formato: (v) => `<button class="btn btn-sm btn-outline-secondary" data-kardex="${v}" title="Ver kárdex"><i class="bi bi-clock-history"></i> Kárdex</button>` },
         ],
         campos: [
           { campo: 'codigo', etiqueta: 'Código', requerido: true, col: 4 },
@@ -55,6 +67,23 @@
         puedeEliminar: () => ES_ADMIN(),
       });
     })().catch(avisarError);
+
+    const TIPOS = { inicial: ['Existencia inicial', 'secondary'], venta: ['Venta', 'danger'], compra: ['Compra', 'success'], cancelacion: ['Cancelación de venta', 'warning'] };
+    const modalK = new bootstrap.Modal(document.getElementById('modal-kardex'));
+    document.getElementById('catalogo').addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-kardex]');
+      if (!b) return;
+      try {
+        const k = await API.get(`/productos/${b.dataset.kardex}/movimientos`);
+        document.getElementById('k-titulo').textContent = `${k.producto.codigo} ${k.producto.nombre} (existencia ${k.producto.existencia})`;
+        document.getElementById('k-filas').innerHTML = k.movimientos.map((m) => `<tr><td>${fecha(m.fecha)}</td>
+          <td><span class="badge text-bg-${TIPOS[m.tipo][1]}">${TIPOS[m.tipo][0]}</span></td><td>${esc(m.referencia || '')}</td>
+          <td class="text-end fw-bold ${m.cantidad < 0 ? 'text-danger' : 'text-success'}">${m.cantidad > 0 ? '+' : ''}${m.cantidad}</td>
+          <td class="text-end">${m.existencia}</td><td>${esc(m.usuario || '')}</td></tr>`).join('')
+          || '<tr><td colspan="6" class="text-center text-muted">Sin movimientos</td></tr>';
+        modalK.show();
+      } catch (err) { avisarError(err); }
+    });
   </script>
 </body>
 </html>

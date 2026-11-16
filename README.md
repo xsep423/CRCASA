@@ -37,6 +37,14 @@ Sistema web de punto de venta y control de inventario para papelerías de artíc
 - **Pedido para recoger:** se registra como venta con estado *pendiente de entrega* y se marca como *entregada* cuando el cliente pasa por él.
 - **Cancelar una venta** (solo administrador) regresa la mercancía a la existencia. Una venta con solicitud de factura no se cancela desde el sistema.
 - La existencia de un producto solo cambia por ventas, compras y cancelaciones; no se edita a mano.
+- **Folios por papelería:** ventas, cotizaciones, compras y cortes llevan un folio consecutivo propio de cada papelería (empiezan en 1).
+- **Cobro con cambio:** en ventas en efectivo el capturista anota con cuánto pagó el cliente; el sistema calcula el cambio y lo imprime en la nota. Si el pago no alcanza, no deja registrar la venta.
+- **Kárdex:** cada entrada y salida de mercancía (existencia inicial, venta, compra, cancelación) queda registrada con la existencia resultante, el folio y el empleado.
+- **Corte de caja:** cada empleado cierra su turno contando el efectivo; el sistema lo compara con fondo inicial + ventas en efectivo del turno y registra la diferencia.
+- **Reportes:** ventas por rango de fechas agrupadas por día, empleado, forma de pago, clasificación o producto; se exportan a Excel (CSV) o PDF.
+- **Sugerencia de compra:** productos en o debajo del mínimo, agrupados por proveedor, con la cantidad para llegar al doble del mínimo; se cargan a la compra con un clic.
+- **Seguridad:** tras 5 intentos fallidos el usuario se bloquea 15 minutos (20 por IP); cada empleado puede cambiar su contraseña.
+- **Bitácora:** cancelaciones, cambios de precio y descuento, compras, cortes y cambios de usuarios quedan registrados con quién y cuándo.
 
 ## Tecnologías
 
@@ -112,6 +120,9 @@ Cada push a `main` vuelve a desplegar solo.
 | Cotizaciones | `cotizaciones.html` | Todos |
 | Ventas, pedidos para recoger y solicitudes de factura | `ventas.html` | Todos (cancelar: admin) |
 | Papelerías que usan el sistema | `papelerias.html` | Soporte |
+| Corte de caja | `corte.html` | Todos (el administrador ve los de toda la papelería) |
+| Reportes de ventas | `reportes.html` | Administrador |
+| Bitácora | `bitacora.html` | Administrador |
 | Clientes | `clientes.html` | Todos (descuento y baja: admin) |
 | Productos | `productos.html` | Consulta todos, edición admin |
 | Compras a proveedores | `compras.html` | Admin |

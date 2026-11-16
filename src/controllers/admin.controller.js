@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const pool = require('../config/db');
 const { HttpError } = require('../utils/http');
 const { pid } = require('../middleware/auth');
+const { bitacora } = require('../services/registro');
 
 const ROLES_VALIDOS = ['capturista', 'administrador', 'soporte'];
 
@@ -49,6 +50,7 @@ const papelerias = {
         [CLASIFICACIONES_BASE.map(([n, d]) => [idPap, n, d])]);
       return idPap;
     });
+    await bitacora(req.usuario, 'Alta de papelería', valores[0], { idPapeleria: id });
     res.status(201).json({ mensaje: 'Papelería registrada', id });
   },
   // PUT /api/papelerias/:id (soporte)
@@ -88,6 +90,7 @@ const usuarios = {
     const hash = await bcrypt.hash(password, 10);
     const [r] = await pool.query('INSERT INTO usuarios (id_papeleria, nombre, usuario, password_hash, rol) VALUES (?,?,?,?,?)',
       [idPap, nombre.trim(), usuario.toLowerCase(), hash, rol]);
+    await bitacora(req.usuario, 'Alta de usuario', `${usuario.toLowerCase()} (${rol})`, { idPapeleria: idPap });
     res.status(201).json({ mensaje: 'Usuario creado', id: r.insertId });
   },
   async actualizar(req, res) {
@@ -107,6 +110,7 @@ const usuarios = {
     }
     const [r] = await pool.query(`UPDATE usuarios SET ${campos.join(', ')} WHERE id_usuario = ?`, [...valores, req.params.id]);
     if (!r.affectedRows) throw new HttpError(404, 'Usuario no encontrado');
+    await bitacora(req.usuario, 'Modificar usuario', `${nombre.trim()} (${rol}${Number(activo) ? '' : ', desactivado'}${password ? ', nueva contraseña' : ''})`, { idPapeleria: idPap });
     res.json({ mensaje: 'Usuario actualizado' });
   },
 };
@@ -128,6 +132,7 @@ const configuracion = {
       const v = Number(req.body[clave]);
       if (isNaN(v) || !valido(v)) throw new HttpError(400, `Valor inválido para ${clave}`);
       await pool.query('UPDATE configuracion SET valor = ? WHERE id_papeleria = ? AND clave = ?', [String(v), pid(req), clave]);
+      await bitacora(req.usuario, 'Cambiar regla', `${clave} = ${v}`);
     }
     res.json({ mensaje: 'Configuración guardada' });
   },
