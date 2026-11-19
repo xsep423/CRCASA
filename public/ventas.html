@@ -33,19 +33,49 @@
     </div></div>
   </main>
 
-  <div class="modal fade" id="modal-factura" tabindex="-1"><div class="modal-dialog"><form class="modal-content" id="form-factura">
-    <div class="modal-header"><h5 class="modal-title">Solicitud de factura · venta folio <span id="fac-folio"></span></h5>
+  <div class="modal fade" id="modal-factura" tabindex="-1"><div class="modal-dialog modal-lg"><form class="modal-content" id="form-factura">
+    <div class="modal-header"><h5 class="modal-title">Factura · venta folio <span id="fac-folio"></span></h5>
       <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
-      <div class="mb-2"><label class="form-label">RFC del cliente *</label><input name="rfc" class="form-control text-uppercase" maxlength="13" required></div>
-      <div class="mb-2"><label class="form-label">Razón social *</label><input name="razon_social" class="form-control" required></div>
-      <div class="mb-2"><label class="form-label">Uso de CFDI</label><select name="uso_cfdi" class="form-select">
-        <option value="G03">G03 · Gastos en general</option><option value="G01">G01 · Adquisición de mercancías</option>
-        <option value="S01">S01 · Sin efectos fiscales</option></select></div>
-      <p class="form-text mb-0">El sistema guarda los datos fiscales del cliente. La factura (CFDI) se emite y timbra fuera del sistema, en el portal del SAT o con el PAC de la papelería.</p>
+      <div class="alert alert-warning py-2 small"><i class="bi bi-cone-striped"></i> <strong>Modo de pruebas.</strong>
+        El CFDI se timbra en el ambiente sandbox del PAC (Facturama) con un emisor de prueba del SAT: <strong>no tiene validez fiscal</strong>.</div>
+
+      <div id="fac-captura">
+        <div class="row g-2">
+          <div class="col-md-4"><label class="form-label">RFC del cliente *</label><input name="rfc" class="form-control text-uppercase" maxlength="13" required></div>
+          <div class="col-md-8"><label class="form-label">Razón social (como en su constancia, sin "S.A. de C.V.") *</label><input name="razon_social" class="form-control text-uppercase" required></div>
+          <div class="col-md-5"><label class="form-label">Régimen fiscal *</label><select name="regimen_fiscal" class="form-select" required>
+            <option value="601">601 · General de Ley Personas Morales</option><option value="603">603 · Personas Morales sin fines de lucro</option>
+            <option value="605">605 · Sueldos y salarios</option><option value="606">606 · Arrendamiento</option>
+            <option value="612">612 · Actividades empresariales y profesionales</option><option value="616">616 · Sin obligaciones fiscales</option>
+            <option value="621">621 · Incorporación fiscal</option><option value="625">625 · Plataformas tecnológicas</option>
+            <option value="626">626 · Régimen Simplificado de Confianza</option></select></div>
+          <div class="col-md-3"><label class="form-label">C.P. fiscal *</label><input name="codigo_postal" class="form-control" maxlength="5" pattern="\d{5}" required></div>
+          <div class="col-md-4"><label class="form-label">Uso de CFDI</label><select name="uso_cfdi" class="form-select">
+            <option value="G03">G03 · Gastos en general</option><option value="G01">G01 · Adquisición de mercancías</option>
+            <option value="S01">S01 · Sin efectos fiscales</option></select></div>
+        </div>
+        <button type="button" class="btn btn-link btn-sm px-0 mt-2" id="fac-demo"><i class="bi bi-magic"></i> Llenar con el receptor de prueba del SAT (URE180429TM6)</button>
+      </div>
+
+      <div id="fac-estado" class="d-none">
+        <dl class="row mb-2">
+          <dt class="col-sm-3">Receptor</dt><dd class="col-sm-9" id="fac-receptor"></dd>
+          <dt class="col-sm-3">Régimen / C.P.</dt><dd class="col-sm-9" id="fac-regimen"></dd>
+          <dt class="col-sm-3">Uso de CFDI</dt><dd class="col-sm-9" id="fac-uso"></dd>
+          <dt class="col-sm-3">Estado</dt><dd class="col-sm-9" id="fac-badge"></dd>
+          <dt class="col-sm-3">Folio fiscal (UUID)</dt><dd class="col-sm-9 font-monospace" id="fac-uuid">—</dd>
+        </dl>
+        <div class="alert alert-danger py-2 small d-none" id="fac-error"></div>
+      </div>
     </div>
-    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-      <button class="btn btn-primary">Guardar solicitud</button></div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      <button class="btn btn-primary" id="fac-guardar"><i class="bi bi-save"></i> Guardar solicitud</button>
+      <button type="button" class="btn btn-success d-none" id="fac-timbrar"><i class="bi bi-patch-check"></i> Timbrar CFDI de prueba</button>
+      <button type="button" class="btn btn-outline-danger d-none" data-archivo="pdf"><i class="bi bi-file-earmark-pdf"></i> PDF</button>
+      <button type="button" class="btn btn-outline-secondary d-none" data-archivo="xml"><i class="bi bi-filetype-xml"></i> XML</button>
+    </div>
   </form></div></div>
 
   <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
@@ -62,14 +92,14 @@
       try {
         filas = await API.get('/ventas?' + params);
         $('tabla').innerHTML = filas.map((v, i) => `<tr class="${v.estado === 'cancelada' ? 'text-muted' : ''}">
-          <td><strong>${v.folio}</strong>${v.folio_cotizacion ? `<br><small class="text-muted">de cot. ${v.folio_cotizacion}</small>` : ''}</td>
+          <td><strong>${v.folio}</strong>${v.estado_cfdi === 'timbrada' ? ' <span class="badge text-bg-success" title="CFDI de prueba timbrado">CFDI</span>' : v.estado_cfdi ? ' <span class="badge text-bg-light border" title="Solicitud de factura">Fact.</span>' : ''}${v.folio_cotizacion ? `<br><small class="text-muted">de cot. ${v.folio_cotizacion}</small>` : ''}</td>
           <td>${fecha(v.fecha)}</td><td>${esc(v.codigo_cliente)} · ${esc(v.cliente)}</td><td>${esc(v.vendio)}</td>
           <td>${esc(v.metodo_pago)}</td><td class="text-end">${Number(v.porcentaje_descuento)}%</td>
           <td class="money">${dinero(v.total)}</td><td>${badgeEstado(v.estado)}</td>
           <td class="text-end text-nowrap">
             <a class="btn btn-sm btn-outline-secondary" href="/nota.html?tipo=venta&id=${v.id_venta}" target="_blank" title="Ver / imprimir"><i class="bi bi-printer"></i></a>
             ${v.estado === 'pendiente_entrega' ? `<button class="btn btn-sm btn-warning" data-entregar="${i}" title="Marcar como entregado"><i class="bi bi-bag-check"></i></button>` : ''}
-            ${v.estado !== 'cancelada' && v.codigo_cliente !== 'PG' ? `<button class="btn btn-sm btn-outline-primary" data-factura="${i}" title="Solicitar factura"><i class="bi bi-file-earmark-ruled"></i></button>` : ''}
+            ${v.estado !== 'cancelada' && v.codigo_cliente !== 'PG' ? `<button class="btn btn-sm btn-outline-primary" data-factura="${i}" title="Factura (CFDI de prueba)"><i class="bi bi-file-earmark-ruled"></i></button>` : ''}
             ${v.estado !== 'cancelada' && ES_ADMIN() ? `<button class="btn btn-sm btn-outline-danger" data-cancelar="${i}" title="Cancelar venta"><i class="bi bi-x-lg"></i></button>` : ''}
           </td></tr>`).join('') || '<tr><td colspan="9" class="text-center text-muted py-4">Sin ventas</td></tr>';
         $('suma').textContent = dinero(filas.filter((v) => v.estado !== 'cancelada').reduce((s, v) => s + Number(v.total), 0));
@@ -84,12 +114,14 @@
         if (b.dataset.entregar !== undefined) {
           avisar((await API.post(`/ventas/${v.id_venta}/entregar`)).mensaje); cargar();
         } else if (b.dataset.factura !== undefined) {
-          const d = await API.get(`/ventas/${v.id_venta}`);
-          if (d.id_solicitud) return avisar(`Esta venta ya tiene la solicitud de factura #${d.id_solicitud}`, 'info');
-          actual = d;
-          $('fac-folio').textContent = d.folio;
-          $('form-factura').rfc.value = d.rfc_cliente || '';
-          $('form-factura').razon_social.value = d.cliente;
+          actual = await API.get(`/ventas/${v.id_venta}`);
+          $('fac-folio').textContent = actual.folio;
+          if (actual.id_solicitud) return mostrarEstado();
+          const f = $('form-factura');
+          f.reset();
+          f.rfc.value = actual.rfc_cliente || '';
+          f.razon_social.value = actual.cliente.toUpperCase();
+          modoFactura(false);
           modalFac.show();
         } else if (b.dataset.cancelar !== undefined) {
           if (!confirm(`¿Cancelar la venta folio ${v.folio}? La mercancía regresa al inventario.`)) return;
@@ -98,14 +130,62 @@
       } catch (err) { avisarError(err); }
     });
 
+    const USOS = { G01: 'G01 · Adquisición de mercancías', G03: 'G03 · Gastos en general', S01: 'S01 · Sin efectos fiscales' };
+    const ESTADO_CFDI = { pendiente: ['secondary', 'Pendiente de timbrar'], timbrada: ['success', 'Timbrada (prueba)'], error: ['danger', 'El PAC la rechazó'] };
+
+    function modoFactura(conSolicitud, sf) {
+      $('fac-captura').classList.toggle('d-none', conSolicitud);
+      $('fac-estado').classList.toggle('d-none', !conSolicitud);
+      $('fac-guardar').classList.toggle('d-none', conSolicitud);
+      const timbrada = conSolicitud && sf.estado_cfdi === 'timbrada';
+      $('fac-timbrar').classList.toggle('d-none', !conSolicitud || timbrada);
+      document.querySelectorAll('[data-archivo]').forEach((b) => b.classList.toggle('d-none', !timbrada));
+    }
+
+    async function mostrarEstado() {
+      const sf = await API.get(`/ventas/${actual.id_venta}/factura`);
+      $('fac-receptor').textContent = `${sf.rfc} · ${sf.razon_social}`;
+      $('fac-regimen').textContent = `${sf.regimen_fiscal} / ${sf.codigo_postal}`;
+      $('fac-uso').textContent = USOS[sf.uso_cfdi] || sf.uso_cfdi;
+      const [color, texto] = ESTADO_CFDI[sf.estado_cfdi];
+      $('fac-badge').innerHTML = `<span class="badge text-bg-${color}">${texto}</span>${sf.fecha_timbrado ? ` <small class="text-muted">${fecha(sf.fecha_timbrado)}</small>` : ''}`;
+      $('fac-uuid').textContent = sf.uuid || '—';
+      $('fac-error').classList.toggle('d-none', !sf.mensaje_pac);
+      $('fac-error').textContent = sf.mensaje_pac || '';
+      modoFactura(true, sf);
+      modalFac.show();
+    }
+
+    $('fac-demo').addEventListener('click', () => {
+      const f = $('form-factura');
+      f.rfc.value = 'URE180429TM6'; f.razon_social.value = 'UNIVERSIDAD ROBOTICA ESPAÑOLA';
+      f.regimen_fiscal.value = '601'; f.codigo_postal.value = '86991'; f.uso_cfdi.value = 'G03';
+    });
+
     $('form-factura').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
         const r = await API.post(`/ventas/${actual.id_venta}/solicitud-factura`, Object.fromEntries(new FormData(e.target)));
-        modalFac.hide();
         avisar(`${r.mensaje} (#${r.id_solicitud})`);
+        await mostrarEstado();
       } catch (err) { avisarError(err); }
     });
+
+    $('fac-timbrar').addEventListener('click', async (e) => {
+      const b = e.currentTarget;
+      const original = b.innerHTML;
+      b.disabled = true;
+      b.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Timbrando…';
+      try {
+        const r = await API.post(`/ventas/${actual.id_venta}/factura/timbrar`);
+        avisar(`${r.mensaje}: ${r.uuid}`);
+      } catch (err) { avisarError(err); }
+      finally { b.disabled = false; b.innerHTML = original; await mostrarEstado().catch(() => {}); cargar(); }
+    });
+
+    document.querySelectorAll('[data-archivo]').forEach((b) => b.addEventListener('click', async () => {
+      try { await API.descargar(`/ventas/${actual.id_venta}/factura/${b.dataset.archivo}`); } catch (err) { avisarError(err); }
+    }));
 
     let t;
     $('buscar').addEventListener('input', () => { clearTimeout(t); t = setTimeout(cargar, 250); });

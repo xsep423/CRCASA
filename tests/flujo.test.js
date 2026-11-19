@@ -139,8 +139,8 @@ test('pedido para recoger, cancelación (solo admin) y solicitud de factura', as
   // solicitud de factura: el cliente necesita RFC
   const v2 = (await api('capturista', 'POST', '/ventas', { id_cliente: cliente.id_cliente, partidas: [{ id_producto: prodB, cantidad: 1 }] })).data.venta;
   assert.equal((await api('capturista', 'POST', `/ventas/${v2.id_venta}/solicitud-factura`, {})).status, 400);
-  assert.equal((await api('capturista', 'POST', `/ventas/${v2.id_venta}/solicitud-factura`, { rfc: 'XAXX010101000' })).status, 201);
-  assert.equal((await api('capturista', 'POST', `/ventas/${v2.id_venta}/solicitud-factura`, { rfc: 'XAXX010101000' })).status, 409);
+  assert.equal((await api('capturista', 'POST', `/ventas/${v2.id_venta}/solicitud-factura`, { rfc: 'XAXX010101000', regimen_fiscal: '616', codigo_postal: '22000' })).status, 201);
+  assert.equal((await api('capturista', 'POST', `/ventas/${v2.id_venta}/solicitud-factura`, { rfc: 'XAXX010101000', regimen_fiscal: '616', codigo_postal: '22000' })).status, 409);
 });
 
 test('compra a proveedor suma existencia y actualiza costo', async () => {

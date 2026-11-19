@@ -18,7 +18,7 @@ Sistema web de punto de venta y control de inventario para papelerías de artíc
 | **Compra** | Operación con un proveedor | **Suma** existencia |
 | **Cotización** | Propuesta de precio para un cliente | **No afecta** |
 | **Nota de venta** | Comprobante que imprime el sistema al registrar una venta (no es factura) | — |
-| **Solicitud de factura** | Datos fiscales del cliente para que la papelería emita el CFDI fuera del sistema (portal del SAT o PAC). Sin timbrado no hay factura | — |
+| **Solicitud de factura** | Datos fiscales del cliente (RFC, razón social, régimen, C.P., uso de CFDI). Con ellos se timbra un CFDI 4.0 **de prueba** en el sandbox del PAC Facturama (sin validez fiscal) | — |
 
 ## Roles
 
@@ -41,7 +41,7 @@ Sistema web de punto de venta y control de inventario para papelerías de artíc
 - **Cobro con cambio:** en ventas en efectivo el capturista anota con cuánto pagó el cliente; el sistema calcula el cambio y lo imprime en la nota. Si el pago no alcanza, no deja registrar la venta.
 - **Kárdex:** cada entrada y salida de mercancía (existencia inicial, venta, compra, cancelación) queda registrada con la existencia resultante, el folio y el empleado.
 - **Corte de caja:** cada empleado cierra su turno contando el efectivo; el sistema lo compara con fondo inicial + ventas en efectivo del turno y registra la diferencia.
-- **Reportes:** ventas por rango de fechas agrupadas por día, empleado, forma de pago, clasificación o producto; se exportan a Excel (CSV) o PDF.
+- **Reportes:** ventas por rango de fechas agrupadas por día, empleado, forma de pago, clasificación o producto, e inventario con su valor; se descargan como archivo Excel (.xlsx) o PDF generado por el servidor. La bitácora también se exporta.
 - **Sugerencia de compra:** productos en o debajo del mínimo, agrupados por proveedor, con la cantidad para llegar al doble del mínimo; se cargan a la compra con un clic.
 - **Seguridad:** tras 5 intentos fallidos el usuario se bloquea 15 minutos (20 por IP); cada empleado puede cambiar su contraseña.
 - **Bitácora:** cancelaciones, cambios de precio y descuento, compras, cortes y cambios de usuarios quedan registrados con quién y cuándo.
@@ -121,7 +121,7 @@ Cada push a `main` vuelve a desplegar solo.
 | Ventas, pedidos para recoger y solicitudes de factura | `ventas.html` | Todos (cancelar: admin) |
 | Papelerías que usan el sistema | `papelerias.html` | Soporte |
 | Corte de caja | `corte.html` | Todos (el administrador ve los de toda la papelería) |
-| Reportes de ventas | `reportes.html` | Administrador |
+| Reportes de ventas e inventario | `reportes.html` | Administrador |
 | Bitácora | `bitacora.html` | Administrador |
 | Clientes | `clientes.html` | Todos (descuento y baja: admin) |
 | Productos | `productos.html` | Consulta todos, edición admin |
@@ -148,20 +148,31 @@ Todo requiere `Authorization: Bearer <token>` excepto el login.
 | POST | `/api/cotizaciones/:id/convertir` · `/api/cotizaciones/:id/cancelar` | Todos |
 | GET / POST | `/api/ventas` | Todos |
 | POST | `/api/ventas/:id/entregar` · `/api/ventas/:id/solicitud-factura` | Todos |
+| GET / POST | `/api/ventas/:id/factura` · `/api/ventas/:id/factura/timbrar` · `/api/ventas/:id/factura/pdf\|xml` | Todos |
 | POST | `/api/ventas/:id/cancelar` | Admin |
 | GET / POST | `/api/compras` | Admin |
 | GET / PUT | `/api/configuracion` | Consulta todos, cambio admin |
 | GET | `/api/resumen` | Admin |
+| GET | `/api/reportes/ventas` · `/api/reportes/inventario` · `/api/bitacora` (y `/exportar?formato=xlsx\|pdf`) | Admin |
 | GET / POST / PUT | `/api/usuarios` | Soporte |
 
 ## Limitaciones
 
 - Los clientes no tienen acceso al sistema ni compran en línea; no hay pago en línea ni envíos.
 - No se muestran imágenes de productos.
-- El sistema no emite facturas (CFDI): solo guarda la solicitud con los datos fiscales; el timbrado se hace en el portal del SAT o con un PAC.
+- La facturación funciona en **modo de pruebas**: el CFDI se timbra en el sandbox de Facturama con un emisor de prueba del SAT y no tiene validez fiscal. Para facturar de verdad, cada papelería necesitaría su propio CSD (e.firma) y un contrato con el PAC.
 - Las cotizaciones nunca se borran: si vencen sin convertirse en venta, quedan como canceladas con su motivo.
 - La fidelidad no se calcula sola: el descuento lo asigna el administrador.
 - Una sola sucursal.
+
+## Facturación de prueba (CFDI 4.0)
+
+1. Crea una cuenta gratuita de sandbox en https://dev.facturama.mx/api/registro
+2. Agrega `FACTURAMA_USUARIO` y `FACTURAMA_PASSWORD` en `.env` y en Vercel (Settings → Environment Variables).
+3. Descarga los CSD de prueba (https://cdnfacturama.azureedge.net/content/csd-pruebas.zip) y registra el del emisor `EKU9003173C9`:
+   `npm run subir-csd -- ruta/EKU9003173C9.cer ruta/EKU9003173C9.key`
+4. Si la base ya existía, aplica la migración sin borrar datos: `npm run migrar`
+5. En **Ventas**, abre la factura de una venta del cliente `C-PRUEBA` (RFC de prueba `URE180429TM6`), guarda la solicitud y presiona **Timbrar CFDI de prueba**. Después se descargan el XML y el PDF.
 
 ## Flujo de trabajo en equipo
 

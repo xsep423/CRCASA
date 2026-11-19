@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CRCASA | Reportes de ventas</title>
+  <title>CRCASA | Reportes</title>
   <link href="/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
   <link href="/vendor/icons/bootstrap-icons.min.css" rel="stylesheet">
   <link href="/css/estilos.css" rel="stylesheet">
@@ -11,8 +11,13 @@
 <body>
   <div id="nav"></div>
   <main class="container py-4">
-    <h1 class="h4 mb-1">Reportes de ventas</h1>
-    <p class="text-muted no-print">Elige el periodo y cómo agrupar. Las ventas canceladas no se suman.</p>
+    <h1 class="h4 mb-1">Reportes</h1>
+    <p class="text-muted no-print">Consulta las ventas de un periodo o el inventario actual y descárgalos en Excel (.xlsx) o PDF.</p>
+    <ul class="nav nav-tabs mb-3" id="tabs">
+      <li class="nav-item"><button class="nav-link active" data-tab="ventas"><i class="bi bi-graph-up"></i> Ventas</button></li>
+      <li class="nav-item"><button class="nav-link" data-tab="inventario"><i class="bi bi-box-seam"></i> Inventario</button></li>
+    </ul>
+    <section id="tab-ventas">
 
     <div class="card mb-3 no-print"><div class="card-body">
       <div class="row g-2 align-items-end">
@@ -25,8 +30,8 @@
           </select></div>
         <div class="col-md-5 d-flex gap-2">
           <button class="btn btn-primary" id="btn-consultar"><i class="bi bi-search"></i> Consultar</button>
-          <button class="btn btn-outline-success" id="btn-excel"><i class="bi bi-file-earmark-spreadsheet"></i> Excel</button>
-          <button class="btn btn-outline-danger" onclick="window.print()"><i class="bi bi-file-earmark-pdf"></i> PDF / Imprimir</button>
+          <button class="btn btn-outline-success" data-exportar="ventas" data-formato="xlsx"><i class="bi bi-file-earmark-excel"></i> Excel</button>
+          <button class="btn btn-outline-danger" data-exportar="ventas" data-formato="pdf"><i class="bi bi-file-earmark-pdf"></i> PDF</button>
         </div>
       </div>
     </div></div>
@@ -41,6 +46,22 @@
       </table>
     </div></div>
     <p class="small text-muted mt-2" id="nota-importe"></p>
+    </section>
+
+    <section id="tab-inventario" class="d-none">
+      <div class="d-flex gap-2 mb-3">
+        <button class="btn btn-outline-success" data-exportar="inventario" data-formato="xlsx"><i class="bi bi-file-earmark-excel"></i> Excel</button>
+        <button class="btn btn-outline-danger" data-exportar="inventario" data-formato="pdf"><i class="bi bi-file-earmark-pdf"></i> PDF</button>
+      </div>
+      <div class="row g-3 mb-3" id="inv-resumen"></div>
+      <div class="card"><div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead class="table-light"><tr><th>Código</th><th>Producto</th><th>Clasificación</th><th class="text-end">Existencia</th>
+            <th class="text-end">Mínimo</th><th class="money">Costo</th><th class="money">Precio</th><th class="money">Valor a costo</th><th></th></tr></thead>
+          <tbody id="inv-filas"></tbody>
+        </table>
+      </div></div>
+    </section>
   </main>
   <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
   <script src="/js/app.js"></script>
@@ -81,19 +102,42 @@
       } catch (err) { avisarError(err); }
     }
 
-    // Excel: CSV con BOM para que Excel respete acentos
-    $('btn-excel').addEventListener('click', () => {
-      if (!datos) return;
-      const celda = (v) => `"${String(v).replace(/"/g, '""')}"`;
-      const lineas = [[NOMBRES[datos.agrupar], 'Ventas', 'Piezas', 'Importe'].map(celda).join(','),
-        ...datos.filas.map((f) => [etiqueta(f.grupo), f.ventas, Number(f.piezas), Number(f.total).toFixed(2)].map(celda).join(','))];
-      const blob = new Blob(['﻿' + lineas.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `reporte-ventas-${datos.agrupar}-${datos.desde}-a-${datos.hasta}.csv`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    });
+    async function inventario() {
+      try {
+        const d = await API.get('/reportes/inventario');
+        const tarjeta = (t, v) => `<div class="col-6 col-md"><div class="card"><div class="card-body py-2">
+          <div class="small text-muted">${t}</div><div class="fs-5 fw-bold">${v}</div></div></div></div>`;
+        $('inv-resumen').innerHTML = tarjeta('Productos', d.resumen.productos) + tarjeta('Piezas', d.resumen.piezas)
+          + tarjeta('Valor a costo', dinero(d.resumen.valor_costo)) + tarjeta('Valor a precio de venta', dinero(d.resumen.valor_venta))
+          + tarjeta('Por reabastecer', d.resumen.por_reabastecer);
+        $('inv-filas').innerHTML = d.filas.map((p) => `<tr><td>${esc(p.codigo)}</td><td>${esc(p.nombre)}</td><td>${esc(p.clasificacion)}</td>
+          <td class="text-end">${p.existencia}</td><td class="text-end">${p.existencia_minima}</td><td class="money">${dinero(p.costo)}</td>
+          <td class="money">${dinero(p.precio_venta)}</td><td class="money">${dinero(p.valor_costo)}</td>
+          <td>${p.alerta ? '<span class="badge text-bg-warning">Reabastecer</span>' : ''}</td></tr>`).join('')
+          || '<tr><td colspan="9" class="text-center text-muted py-4">Sin productos</td></tr>';
+      } catch (err) { avisarError(err); }
+    }
+
+    // Pestañas Ventas / Inventario
+    document.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => {
+      document.querySelectorAll('[data-tab]').forEach((x) => x.classList.toggle('active', x === b));
+      $('tab-ventas').classList.toggle('d-none', b.dataset.tab !== 'ventas');
+      $('tab-inventario').classList.toggle('d-none', b.dataset.tab !== 'inventario');
+      if (b.dataset.tab === 'inventario') inventario();
+    }));
+
+    // Descarga real del archivo generado por el servidor (.xlsx con formato o .pdf)
+    document.querySelectorAll('[data-exportar]').forEach((b) => b.addEventListener('click', async () => {
+      const q = new URLSearchParams({ formato: b.dataset.formato });
+      if (b.dataset.exportar === 'ventas') {
+        q.set('desde', $('desde').value); q.set('hasta', $('hasta').value); q.set('agrupar', $('agrupar').value);
+      }
+      const original = b.innerHTML;
+      b.disabled = true;
+      b.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generando…';
+      try { await API.descargar(`/reportes/${b.dataset.exportar}/exportar?${q}`); } catch (err) { avisarError(err); }
+      finally { b.disabled = false; b.innerHTML = original; }
+    }));
     $('btn-consultar').addEventListener('click', consultar);
     $('agrupar').addEventListener('change', consultar);
     consultar();

@@ -5,6 +5,7 @@ const calc = require('../services/calculos');
 const { pid } = require('../middleware/auth');
 const { siguienteFolio, movimiento, bitacora } = require('../services/registro');
 const { redondear } = require('../utils/http');
+const pac = require('../services/facturama');
 
 const METODOS = ['efectivo', 'tarjeta', 'transferencia'];
 const ENTREGAS = ['mostrador', 'recoger'];
@@ -65,7 +66,7 @@ async function registrarVenta(conn, opts) {
 async function detalle(conn, idPap, id) {
   const [cab] = await conn.query(
     `SELECT v.*, co.folio AS folio_cotizacion, c.codigo AS codigo_cliente, c.nombre AS cliente, c.rfc AS rfc_cliente, u.nombre AS vendio,
-            sf.id_solicitud
+            sf.id_solicitud, sf.estado_cfdi, sf.uuid
      FROM ventas v
      JOIN clientes c ON c.id_cliente = v.id_cliente
      JOIN usuarios u ON u.id_usuario = v.id_usuario
@@ -84,8 +85,9 @@ async function detalle(conn, idPap, id) {
 async function listar(req, res) {
   const { estado, desde, hasta, buscar } = req.query;
   let sql = `SELECT v.id_venta, v.folio, co.folio AS folio_cotizacion, v.fecha, v.total, v.porcentaje_descuento, v.metodo_pago, v.tipo_entrega, v.estado,
-                    v.id_cotizacion, c.codigo AS codigo_cliente, c.nombre AS cliente, u.nombre AS vendio
+                    v.id_cotizacion, c.codigo AS codigo_cliente, c.nombre AS cliente, u.nombre AS vendio, sf.estado_cfdi
              FROM ventas v
+             LEFT JOIN solicitudes_factura sf ON sf.id_venta = v.id_venta
              JOIN clientes c ON c.id_cliente = v.id_cliente
              JOIN usuarios u ON u.id_usuario = v.id_usuario
              LEFT JOIN cotizaciones co ON co.id_cotizacion = v.id_cotizacion
@@ -140,21 +142,95 @@ async function cancelar(req, res) {
   res.json({ mensaje: 'Venta cancelada y existencia devuelta' });
 }
 
-// POST /api/ventas/:id/solicitud-factura  { rfc?, razon_social?, uso_cfdi? }
-// El sistema NO emite facturas: sin timbrado ante el SAT no existe CFDI. Lo que hace es guardar
-// los datos fiscales del cliente para que la papelería emita el CFDI en el portal del SAT o con su PAC.
+// Catálogo c_RegimenFiscal del SAT (los más comunes para clientes de una papelería)
+const REGIMENES = ['601', '603', '605', '606', '612', '616', '621', '625', '626'];
+const USOS = ['G01', 'G03', 'S01', 'D10', 'P01'];
+
+// POST /api/ventas/:id/solicitud-factura  { rfc?, razon_social?, uso_cfdi?, regimen_fiscal, codigo_postal }
+// Guarda los datos fiscales del cliente. Después se timbra el CFDI de PRUEBA con el PAC (POST .../factura/timbrar).
 async function solicitarFactura(req, res) {
   const venta = await detalle(pool, pid(req), req.params.id);
   if (venta.estado === 'cancelada') throw new HttpError(409, 'No se puede solicitar factura de una venta cancelada');
   if (venta.id_solicitud) throw new HttpError(409, 'Esta venta ya tiene una solicitud de factura');
   if (venta.codigo_cliente === 'PG') throw new HttpError(400, 'Para solicitar factura, la venta debe estar a nombre de un cliente registrado');
-  const rfc = (req.body.rfc || venta.rfc_cliente || '').toUpperCase();
+  const rfc = (req.body.rfc || venta.rfc_cliente || '').toUpperCase().trim();
   if (!/^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/.test(rfc)) throw new HttpError(400, 'El cliente necesita un RFC válido para solicitar factura');
+  const razon = (req.body.razon_social || venta.cliente).toUpperCase().trim();
+  const uso = req.body.uso_cfdi || 'G03';
+  const regimen = String(req.body.regimen_fiscal || '');
+  const cp = String(req.body.codigo_postal || '').trim();
+  if (!USOS.includes(uso)) throw new HttpError(400, 'Uso de CFDI inválido');
+  if (!REGIMENES.includes(regimen)) throw new HttpError(400, 'Elige el régimen fiscal del cliente');
+  if (!/^\d{5}$/.test(cp)) throw new HttpError(400, 'El código postal fiscal debe tener 5 dígitos');
   const [r] = await pool.query(
-    'INSERT INTO solicitudes_factura (id_venta, rfc, razon_social, uso_cfdi, id_usuario) VALUES (?,?,?,?,?)',
-    [venta.id_venta, rfc, req.body.razon_social || venta.cliente, req.body.uso_cfdi || 'G03', req.usuario.id]);
+    `INSERT INTO solicitudes_factura (id_venta, rfc, razon_social, uso_cfdi, regimen_fiscal, codigo_postal, id_usuario)
+     VALUES (?,?,?,?,?,?,?)`,
+    [venta.id_venta, rfc, razon, uso, regimen, cp, req.usuario.id]);
   await bitacora(req.usuario, 'Solicitud de factura', `Venta ${venta.folio} · RFC ${rfc}`);
   res.status(201).json({ mensaje: 'Solicitud de factura registrada', id_solicitud: r.insertId });
 }
 
-module.exports = { registrarVenta, listar, obtener, crear, entregar, cancelar, solicitarFactura };
+async function solicitudDe(idPap, idVenta) {
+  const [rows] = await pool.query(
+    `SELECT sf.*, u.nombre AS solicito FROM solicitudes_factura sf
+     JOIN ventas v ON v.id_venta = sf.id_venta JOIN usuarios u ON u.id_usuario = sf.id_usuario
+     WHERE sf.id_venta = ? AND v.id_papeleria = ?`, [idVenta, idPap]);
+  if (!rows.length) throw new HttpError(404, 'La venta no tiene solicitud de factura');
+  return rows[0];
+}
+
+// GET /api/ventas/:id/factura — estado de la solicitud y del timbrado
+async function factura(req, res) {
+  const sf = await solicitudDe(pid(req), req.params.id);
+  res.json({ ...sf, prueba: true });
+}
+
+// Datos del emisor: por defecto el contribuyente de PRUEBA del SAT que acepta el sandbox.
+// Cada papelería puede cambiarlos en configuración (claves cfdi_*), pero en sandbox solo sirven RFC de prueba.
+async function emisorDe(idPap) {
+  const [rows] = await pool.query("SELECT clave, valor FROM configuracion WHERE id_papeleria = ? AND clave LIKE 'cfdi\\_%'", [idPap]);
+  const cfg = Object.fromEntries(rows.map((r) => [r.clave, r.valor]));
+  return {
+    rfc: cfg.cfdi_rfc || 'EKU9003173C9',
+    nombre: cfg.cfdi_razon_social || 'ESCUELA KEMPER URGATE',
+    regimen: cfg.cfdi_regimen || '601',
+    cp: cfg.cfdi_cp || '42501',
+  };
+}
+
+// POST /api/ventas/:id/factura/timbrar — manda el CFDI al sandbox del PAC y guarda el UUID
+async function timbrarFactura(req, res) {
+  const idPap = pid(req);
+  const venta = await detalle(pool, idPap, req.params.id);
+  const sf = await solicitudDe(idPap, req.params.id);
+  if (sf.estado_cfdi === 'timbrada') throw new HttpError(409, `La factura ya está timbrada (UUID ${sf.uuid})`);
+  if (venta.estado === 'cancelada') throw new HttpError(409, 'La venta está cancelada');
+  const cfdi = pac.armarCfdi({ venta, solicitud: sf, emisor: await emisorDe(idPap) });
+  let t;
+  try {
+    t = await pac.timbrar(cfdi);
+  } catch (err) {
+    await pool.query("UPDATE solicitudes_factura SET estado_cfdi = 'error', mensaje_pac = ? WHERE id_solicitud = ?",
+      [String(err.message).slice(0, 500), sf.id_solicitud]);
+    throw err;
+  }
+  await pool.query(
+    "UPDATE solicitudes_factura SET estado_cfdi = 'timbrada', uuid = ?, id_cfdi_pac = ?, fecha_timbrado = NOW(), mensaje_pac = NULL WHERE id_solicitud = ?",
+    [t.uuid, t.id, sf.id_solicitud]);
+  await bitacora(req.usuario, 'Timbrar CFDI de prueba', `Venta ${venta.folio} · UUID ${t.uuid}`);
+  res.json({ mensaje: 'CFDI de prueba timbrado', uuid: t.uuid });
+}
+
+// GET /api/ventas/:id/factura/pdf | /xml — descarga el archivo que generó el PAC
+async function archivoFactura(req, res) {
+  const formato = req.params.formato;
+  if (!['pdf', 'xml'].includes(formato)) throw new HttpError(400, 'Formato inválido');
+  const sf = await solicitudDe(pid(req), req.params.id);
+  if (sf.estado_cfdi !== 'timbrada') throw new HttpError(409, 'La factura todavía no está timbrada');
+  const buf = await pac.descargar(formato, sf.id_cfdi_pac);
+  res.set('Content-Type', formato === 'pdf' ? 'application/pdf' : 'application/xml');
+  res.set('Content-Disposition', `attachment; filename="CFDI-prueba-${sf.uuid}.${formato}"`);
+  res.send(buf);
+}
+
+module.exports = { registrarVenta, listar, obtener, crear, entregar, cancelar, solicitarFactura, factura, timbrarFactura, archivoFactura };

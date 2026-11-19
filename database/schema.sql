@@ -227,8 +227,16 @@ CREATE TABLE solicitudes_factura (
   rfc           VARCHAR(13)  NOT NULL,
   razon_social  VARCHAR(150) NOT NULL,
   uso_cfdi      VARCHAR(5)   NOT NULL DEFAULT 'G03',
+  regimen_fiscal VARCHAR(3)  NOT NULL DEFAULT '601',  -- régimen fiscal del receptor (CFDI 4.0)
+  codigo_postal  VARCHAR(5)  NOT NULL DEFAULT '',     -- código postal del domicilio fiscal del receptor
   fecha         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   id_usuario    INT NOT NULL,
+  -- Timbrado de prueba con el PAC (sandbox de Facturama): sin validez fiscal
+  estado_cfdi   ENUM('pendiente','timbrada','error') NOT NULL DEFAULT 'pendiente',
+  uuid          VARCHAR(36),                         -- folio fiscal que asigna el PAC
+  id_cfdi_pac   VARCHAR(60),                         -- identificador del CFDI en el PAC (para descargar XML/PDF)
+  fecha_timbrado TIMESTAMP NULL,
+  mensaje_pac   VARCHAR(500),                        -- último error que respondió el PAC
   CONSTRAINT fk_sol_venta FOREIGN KEY (id_venta) REFERENCES ventas(id_venta),
   CONSTRAINT fk_sol_usuario FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
 ) /*T![auto_id_cache] AUTO_ID_CACHE=1 */;
