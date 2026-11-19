@@ -94,6 +94,8 @@ async function excel(r) {
     hoja.mergeCells(fila, 1, fila, n);
     hoja.getCell(fila, 1).value = r.nota;
     hoja.getCell(fila, 1).font = { italic: true, size: 9, color: { argb: 'FF666666' } };
+    hoja.getCell(fila, 1).alignment = { wrapText: true, vertical: 'top' };
+    hoja.getRow(fila).height = 30;
   }
   return Buffer.from(await libro.xlsx.writeBuffer());
 }
