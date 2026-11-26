@@ -3,8 +3,8 @@
 USE papeleria_crcasa;
 
 ALTER TABLE solicitudes_factura
-  ADD COLUMN regimen_fiscal VARCHAR(3) NOT NULL DEFAULT '601' AFTER uso_cfdi,
-  ADD COLUMN codigo_postal VARCHAR(5) NOT NULL DEFAULT '' AFTER regimen_fiscal,
+  ADD COLUMN regimen_fiscal VARCHAR(3) NOT NULL DEFAULT '601',
+  ADD COLUMN codigo_postal VARCHAR(5) NOT NULL DEFAULT '',
   ADD COLUMN estado_cfdi ENUM('pendiente','timbrada','error') NOT NULL DEFAULT 'pendiente',
   ADD COLUMN uuid VARCHAR(36),
   ADD COLUMN id_cfdi_pac VARCHAR(60),
