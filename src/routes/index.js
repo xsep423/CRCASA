@@ -80,6 +80,9 @@ router.get('/ventas/:id', todos, m(ventas.obtener));
 router.post('/ventas', todos, m(ventas.crear));
 router.post('/ventas/:id/entregar', todos, m(ventas.entregar));
 router.post('/ventas/:id/solicitud-factura', todos, m(ventas.solicitarFactura));
+router.get('/ventas/:id/factura', todos, m(ventas.factura));
+router.post('/ventas/:id/factura/timbrar', todos, m(ventas.timbrarFactura));
+router.get('/ventas/:id/factura/:formato', todos, m(ventas.archivoFactura));
 router.post('/ventas/:id/cancelar', soloAdmin, m(ventas.cancelar));
 
 // ---------- Compras a proveedores (suman existencia) ----------
@@ -93,7 +96,11 @@ router.get('/configuracion', todos, m(admin.configuracion.obtener));
 router.put('/configuracion', soloAdmin, m(admin.configuracion.actualizar));
 router.get('/resumen', soloAdmin, m(admin.resumen));
 router.get('/reportes/ventas', soloAdmin, m(reportes.ventas));
+router.get('/reportes/ventas/exportar', soloAdmin, m(reportes.exportarVentas));
+router.get('/reportes/inventario', soloAdmin, m(reportes.inventario));
+router.get('/reportes/inventario/exportar', soloAdmin, m(reportes.exportarInventario));
 router.get('/bitacora', soloAdmin, m(reportes.bitacora));
+router.get('/bitacora/exportar', soloAdmin, m(reportes.exportarBitacora));
 
 // ---------- Corte de caja (cada empleado cierra su turno) ----------
 router.get('/cortes/actual', todos, m(cortes.actual));

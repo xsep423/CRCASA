@@ -17,8 +17,12 @@
       <div class="row g-2 align-items-end">
         <div class="col-md-2"><label class="form-label">Desde</label><input id="desde" type="date" class="form-control"></div>
         <div class="col-md-2"><label class="form-label">Hasta</label><input id="hasta" type="date" class="form-control"></div>
-        <div class="col-md-5"><label class="form-label">Buscar</label><input id="buscar" class="form-control" placeholder="Acción, detalle o empleado"></div>
-        <div class="col-md-3"><button class="btn btn-primary w-100" id="btn"><i class="bi bi-search"></i> Consultar</button></div>
+        <div class="col-md-4"><label class="form-label">Buscar</label><input id="buscar" class="form-control" placeholder="Acción, detalle o empleado"></div>
+        <div class="col-md-4 d-flex gap-2">
+          <button class="btn btn-primary" id="btn"><i class="bi bi-search"></i> Consultar</button>
+          <button class="btn btn-outline-success" data-formato="xlsx"><i class="bi bi-file-earmark-excel"></i> Excel</button>
+          <button class="btn btn-outline-danger" data-formato="pdf"><i class="bi bi-file-earmark-pdf"></i> PDF</button>
+        </div>
       </div>
     </div></div>
     <div class="card"><div class="table-responsive">
@@ -49,6 +53,11 @@
       } catch (err) { avisarError(err); }
     }
     $('btn').addEventListener('click', cargar);
+    document.querySelectorAll('[data-formato]').forEach((b) => b.addEventListener('click', async () => {
+      const q = new URLSearchParams({ formato: b.dataset.formato, desde: $('desde').value, hasta: $('hasta').value, buscar: $('buscar').value.trim() });
+      b.disabled = true;
+      try { await API.descargar('/bitacora/exportar?' + q); } catch (err) { avisarError(err); } finally { b.disabled = false; }
+    }));
     $('buscar').addEventListener('keydown', (e) => { if (e.key === 'Enter') cargar(); });
     cargar();
   </script>

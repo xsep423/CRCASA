@@ -30,6 +30,10 @@ INSERT INTO clientes (id_papeleria, codigo, nombre, telefono, email, rfc, porcen
 (3, 'C-0001', 'Colegio Arcángel',                '664-120-0001', 'compras@arcangel.test',    'CAR920404IJ5', 10),
 (3, 'C-0002', 'Taller de Arte Pinceladas',       '664-120-0002', NULL,                       NULL,           5);
 
+-- Cliente con un RFC de PRUEBA del SAT: es el que acepta el sandbox del PAC para timbrar facturas de prueba
+INSERT INTO clientes (id_papeleria, codigo, nombre, email, rfc, porcentaje_descuento)
+SELECT id_papeleria, 'C-PRUEBA', 'UNIVERSIDAD ROBOTICA ESPAÑOLA', 'facturas@ure.test', 'URE180429TM6', 0 FROM papelerias ORDER BY id_papeleria;
+
 INSERT INTO clasificaciones (id_papeleria, nombre, descripcion)
 SELECT p.id_papeleria, c.nombre, c.descripcion FROM papelerias p CROSS JOIN (
   SELECT 1 AS orden, 'Escolar' AS nombre, 'Cuadernos, lápices, plumas, colores y útiles escolares' AS descripcion

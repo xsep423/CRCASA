@@ -25,6 +25,23 @@ const API = {
   put: (url, body) => API.request(url, { method: 'PUT', body }),
   del: (url) => API.request(url, { method: 'DELETE' }),
 
+  // Descarga un archivo generado por el servidor (Excel, PDF, XML) con la sesión del empleado
+  async descargar(url) {
+    const res = await fetch('/api' + url, { headers: { Authorization: `Bearer ${API.token()}` } });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'No se pudo generar el archivo');
+    }
+    const nombre = (/filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '') || [])[1] || 'archivo';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(await res.blob());
+    a.download = nombre;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  },
+
   guardarSesion({ token, usuario }) {
     localStorage.setItem('token', token);
     localStorage.setItem('usuario', JSON.stringify(usuario));
