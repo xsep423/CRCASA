@@ -210,8 +210,12 @@ async function timbrarFactura(req, res) {
   try {
     t = await pac.timbrar(cfdi);
   } catch (err) {
-    await pool.query("UPDATE solicitudes_factura SET estado_cfdi = 'error', mensaje_pac = ? WHERE id_solicitud = ?",
-      [String(err.message).slice(0, 500), sf.id_solicitud]);
+    // Solo queda como "rechazada" si el PAC respondió con un error; si falta configurar el
+    // timbrado (503), la solicitud sigue pendiente y se puede timbrar en cuanto se configure.
+    if (err.status !== 503) {
+      await pool.query("UPDATE solicitudes_factura SET estado_cfdi = 'error', mensaje_pac = ? WHERE id_solicitud = ?",
+        [String(err.message).slice(0, 500), sf.id_solicitud]);
+    }
     throw err;
   }
   await pool.query(

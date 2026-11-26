@@ -78,7 +78,7 @@ test.before(async () => {
   await login('caj', `u5_caj_${s}`);
   const clas = (await api('adm', 'GET', '/clasificaciones')).data[0].id_clasificacion;
   prod = (await api('adm', 'POST', '/productos', { codigo: 'U5-1', nombre: 'Cuaderno profesional', precio_venta: 37.5, existencia: 50, existencia_minima: 5, id_clasificacion: clas })).data.id;
-  prod2 = (await api('adm', 'POST', '/productos', { codigo: 'U5-2', nombre: 'Pluma azul', precio_venta: 8.9, existencia: 7, existencia_minima: 10, id_clasificacion: clas })).data.id;
+  prod2 = (await api('adm', 'POST', '/productos', { codigo: 'U5-2', nombre: 'Pluma azul', precio_venta: 8.9, existencia: 9, existencia_minima: 10, id_clasificacion: clas })).data.id;
   clientePrueba = (await api('adm', 'POST', '/clientes', { codigo: 'URE', nombre: 'Universidad Robótica Española', rfc: 'URE180429TM6', porcentaje_descuento: 7 })).data.id;
   clienteFalso = (await api('adm', 'POST', '/clientes', { codigo: 'FALSO', nombre: 'Cliente sin RFC de prueba', rfc: 'XYZ010101AB1' })).data.id;
 });
@@ -137,6 +137,21 @@ test('si el PAC rechaza, se guarda el error y se puede corregir y reintentar', a
   assert.match(sf.mensaje_pac, /RFC del receptor/);
   const pdf = await api('caj', 'GET', `/ventas/${v.id_venta}/factura/pdf`);
   assert.equal(pdf.status, 409);
+});
+
+test('sin credenciales del PAC la solicitud sigue pendiente y no se marca como rechazada', async () => {
+  const v = await vender(clientePrueba);
+  await api('caj', 'POST', `/ventas/${v.id_venta}/solicitud-factura`, datosFiscales);
+  const guardado = process.env.FACTURAMA_PASSWORD;
+  delete process.env.FACTURAMA_PASSWORD;
+  try {
+    const t = await api('caj', 'POST', `/ventas/${v.id_venta}/factura/timbrar`);
+    assert.equal(t.status, 503);
+    assert.match(t.data.error, /no está configurado/);
+  } finally { process.env.FACTURAMA_PASSWORD = guardado; }
+  const sf = (await api('caj', 'GET', `/ventas/${v.id_venta}/factura`)).data;
+  assert.equal(sf.estado_cfdi, 'pendiente');
+  assert.equal(sf.mensaje_pac, null);
 });
 
 test('reporte de ventas en Excel real (.xlsx) con fórmula de total', async () => {
