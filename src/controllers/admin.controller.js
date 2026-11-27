@@ -120,16 +120,19 @@ const configuracion = {
     const [rows] = await pool.query('SELECT clave, valor FROM configuracion WHERE id_papeleria = ?', [pid(req)]);
     res.json(Object.fromEntries(rows.map((r) => [r.clave, Number(r.valor)])));
   },
-  // PUT { dias_vigencia_cotizacion } (administrador)
+  // PUT { dias_vigencia_cotizacion, fondo_caja_sugerido } (administrador)
   async actualizar(req, res) {
     const reglas = {
       dias_vigencia_cotizacion: (v) => Number.isInteger(v) && v >= 1 && v <= 90,
+      fondo_caja_sugerido: (v) => v >= 0 && v <= 100000,
     };
     for (const [clave, valido] of Object.entries(reglas)) {
       if (req.body[clave] === undefined) continue;
       const v = Number(req.body[clave]);
       if (isNaN(v) || !valido(v)) throw new HttpError(400, `Valor inválido para ${clave}`);
-      await pool.query('UPDATE configuracion SET valor = ? WHERE id_papeleria = ? AND clave = ?', [String(v), pid(req), clave]);
+      await pool.query(
+        'INSERT INTO configuracion (id_papeleria, clave, valor) VALUES (?,?,?) ON DUPLICATE KEY UPDATE valor = VALUES(valor)',
+        [pid(req), clave, String(v)]);
       await bitacora(req.usuario, 'Cambiar regla', `${clave} = ${v}`);
     }
     res.json({ mensaje: 'Configuración guardada' });
@@ -157,7 +160,9 @@ async function resumen(req, res) {
      FROM detalle_venta d JOIN ventas v ON v.id_venta = d.id_venta JOIN productos p ON p.id_producto = d.id_producto
      WHERE v.id_papeleria = ? AND v.estado <> 'cancelada' AND v.fecha >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
      GROUP BY p.id_producto, p.codigo, p.nombre ORDER BY piezas DESC LIMIT 5`, [p]);
-  res.json({ hoy, mes, cotizaciones_vigentes: cot.vigentes, pedidos_pendientes: pend.pedidos, bajo_minimo: bajos, mas_vendidos: top });
+  const [[cajas]] = await pool.query(
+    "SELECT COUNT(*) AS abiertas FROM turnos_caja WHERE id_papeleria = ? AND estado = 'abierto'", [p]);
+  res.json({ hoy, mes, cajas_abiertas: cajas.abiertas, cotizaciones_vigentes: cot.vigentes, pedidos_pendientes: pend.pedidos, bajo_minimo: bajos, mas_vendidos: top });
 }
 
 module.exports = { papelerias, usuarios, configuracion, resumen };

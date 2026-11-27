@@ -76,6 +76,7 @@ test.before(async () => {
   await crear(`u5_caj_${s}`, 'capturista', pap);
   await login('adm', `u5_adm_${s}`);
   await login('caj', `u5_caj_${s}`);
+  await api('caj', 'POST', '/caja/abrir', { fondo_inicial: 300 });
   const clas = (await api('adm', 'GET', '/clasificaciones')).data[0].id_clasificacion;
   prod = (await api('adm', 'POST', '/productos', { codigo: 'U5-1', nombre: 'Cuaderno profesional', precio_venta: 37.5, existencia: 50, existencia_minima: 5, id_clasificacion: clas })).data.id;
   prod2 = (await api('adm', 'POST', '/productos', { codigo: 'U5-2', nombre: 'Pluma azul', precio_venta: 8.9, existencia: 9, existencia_minima: 10, id_clasificacion: clas })).data.id;

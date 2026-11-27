@@ -172,9 +172,26 @@ function pintar() {
 }
 
 // ---------------- Cobro en efectivo ----------------
+// Botones con los billetes con que normalmente paga el cliente (solo los que alcanzan para el total)
+function pagosRapidos() {
+  const total = estado.total || 0;
+  const billetes = [20, 50, 100, 200, 500, 1000].filter((b) => b > total).slice(0, 4);
+  $('pagos-rapidos').innerHTML = total > 0
+    ? `<button type="button" class="btn btn-sm btn-outline-success" data-pago="${total}">Exacto</button>`
+      + billetes.map((b) => `<button type="button" class="btn btn-sm btn-outline-secondary" data-pago="${b}">${dinero(b).replace('.00', '')}</button>`).join('')
+    : '';
+}
+$('pagos-rapidos').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-pago]');
+  if (!b) return;
+  $('pago-con').value = b.dataset.pago;
+  actualizarCambio();
+});
+
 function actualizarCambio() {
   const efectivo = $('metodo').value === 'efectivo';
   $('cobro').classList.toggle('d-none', !efectivo);
+  pagosRapidos();
   const pago = Number($('pago-con').value);
   const cambio = pago - (estado.total || 0);
   const el = $('t-cambio');
@@ -210,7 +227,22 @@ function listo(titulo, detalle, url) {
   modales.listo.show();
 }
 
+// ---------------- Caja ----------------
+// Sin caja abierta no se puede vender: el botón lo indica y al presionarlo pide abrirla.
+estado.caja = null;
+document.addEventListener('caja', (e) => {
+  estado.caja = e.detail;
+  const abierta = e.detail.abierta;
+  $('aviso-caja').classList.toggle('d-none', abierta);
+  $('aviso-caja-vieja').classList.toggle('d-none', !(abierta && e.detail.de_otro_dia));
+  if (!estado.idCotizacion) $('btn-venta').querySelector('span').textContent = abierta ? 'Registrar venta' : 'Abrir caja para vender';
+  $('btn-venta').classList.toggle('btn-success', abierta);
+  $('btn-venta').classList.toggle('btn-outline-success', !abierta);
+});
+$('btn-abrir-caja').addEventListener('click', () => abrirCaja());
+
 async function registrarVenta() {
+  if (estado.caja && !estado.caja.abierta) { abrirCaja(); return; }
   try {
     const body = { ...cuerpo(), metodo_pago: $('metodo').value, tipo_entrega: $('entrega').value };
     if (body.metodo_pago === 'efectivo' && $('pago-con').value) body.pago_con = Number($('pago-con').value);
@@ -228,7 +260,11 @@ async function registrarVenta() {
     listo(`Venta folio ${v.folio} registrada`,
       `Total ${dinero(v.total)}${v.cambio !== null && v.cambio !== undefined ? ` · Pagó con ${dinero(v.pago_con)} · Cambio ${dinero(v.cambio)}` : ''}${recoger ? ' · Pedido pendiente de entrega' : ''}`,
       `/nota.html?tipo=venta&id=${idVenta}`);
-  } catch (err) { mostrarFaltantes(err); }
+    refrescarCaja().catch(() => {});
+  } catch (err) {
+    if (err.caja_cerrada) { avisar(err.message, 'warning'); refrescarCaja().then(() => abrirCaja()); return; }
+    mostrarFaltantes(err);
+  }
 }
 
 async function guardarCotizacion() {
@@ -287,5 +323,8 @@ document.addEventListener('keydown', (e) => {
     } else {
       await cargarClientePorCodigo('PG');
     }
+    // Al entrar a la captura con la caja cerrada, se pide la apertura (fondo inicial)
+    const caja = await estadoCaja();
+    if (!caja.abierta) abrirCaja({ obligatorio: true });
   } catch (err) { avisarError(err); }
 })();

@@ -25,7 +25,7 @@
             <h2 class="h6 mb-0">Productos</h2>
             <span class="text-muted small" id="conteo-productos"></span>
           </div>
-          <input id="buscar-producto" class="form-control mb-2" placeholder="Buscar por nombre o código" autocomplete="off">
+          <input id="buscar-producto" class="form-control mb-2" placeholder="Buscar por nombre o código (o escanea el código de barras y presiona Enter)" autocomplete="off">
           <div class="d-flex flex-wrap gap-1 mb-2" id="categorias"></div>
           <div class="catalogo">
             <table class="table table-hover table-sm mb-0">
@@ -80,18 +80,28 @@
               </select>
             </div>
           </div>
-          <div id="cobro" class="d-flex justify-content-between align-items-center gap-2 border rounded p-2 mb-3 bg-light">
-            <label for="pago-con" class="mb-0 small">Pagó con</label>
-            <input id="pago-con" type="number" min="0" step="0.5" class="form-control form-control-sm text-end" style="max-width:120px" placeholder="$0.00">
-            <span class="small">Cambio</span><span class="fs-5 fw-bold money" id="t-cambio">$0.00</span>
+          <div id="cobro" class="border rounded p-2 mb-3 bg-light">
+            <div class="d-flex justify-content-between align-items-center gap-2">
+              <label for="pago-con" class="mb-0 small">Pagó con</label>
+              <input id="pago-con" type="number" min="0" step="0.5" class="form-control form-control-sm text-end" style="max-width:120px" placeholder="$0.00">
+              <span class="small">Cambio</span><span class="fs-5 fw-bold money" id="t-cambio">$0.00</span>
+            </div>
+            <div class="d-flex flex-wrap gap-1 mt-2" id="pagos-rapidos" title="Toca el billete con el que pagó el cliente"></div>
           </div>
 
           <div id="faltantes" class="alert alert-warning d-none small"></div>
+          <div id="aviso-caja" class="alert alert-warning d-none small d-flex align-items-center gap-2">
+            <i class="bi bi-lock-fill fs-5"></i>
+            <span class="flex-fill">Tu caja está cerrada. Ábrela contando tu fondo para poder registrar ventas (las cotizaciones sí se pueden guardar).</span>
+            <button class="btn btn-sm btn-success text-nowrap" id="btn-abrir-caja"><i class="bi bi-unlock"></i> Abrir caja</button>
+          </div>
+          <div id="aviso-caja-vieja" class="alert alert-warning d-none small"><i class="bi bi-exclamation-triangle"></i>
+            Tu caja sigue abierta desde otro día. Haz tu <a href="/corte.html">corte de caja</a> y abre una nueva para que las cuentas del día cuadren.</div>
 
           <div class="d-grid gap-2">
-            <button class="btn btn-success btn-lg" id="btn-venta"><i class="bi bi-cash-coin"></i> <span>Registrar venta</span></button>
+            <button class="btn btn-success btn-lg" id="btn-venta"><i class="bi bi-cash-coin"></i> <span>Registrar venta</span> <kbd class="small ms-1">F2</kbd></button>
             <div class="d-flex gap-2">
-              <button class="btn btn-outline-primary flex-fill" id="btn-cotizacion"><i class="bi bi-file-earmark-text"></i> <span>Guardar como cotización</span></button>
+              <button class="btn btn-outline-primary flex-fill" id="btn-cotizacion"><i class="bi bi-file-earmark-text"></i> <span>Guardar como cotización</span> <kbd class="small ms-1">F4</kbd></button>
               <button class="btn btn-outline-secondary" id="btn-limpiar" title="Cancelar captura"><i class="bi bi-x-lg"></i></button>
             </div>
           </div>

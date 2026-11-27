@@ -34,6 +34,8 @@ test.before(async () => {
     const r = await api(null, 'POST', '/auth/login', { usuario: `t_${rol}_${sufijo}`, password: 'Prueba12345' });
     tokens[rol] = r.data.token;
   }
+  // quienes venden abren su caja primero
+  for (const rol of ['capturista', 'administrador']) await api(rol, 'POST', '/caja/abrir', { fondo_inicial: 500 });
 });
 
 test.after(async () => { server.close(); await pool.end(); });
@@ -179,6 +181,7 @@ test('cada papelería solo ve y opera sus propios datos', async () => {
   const u = await api('soporte', 'POST', '/usuarios', { nombre: 'Admin otra papelería', usuario: `t_otra_${sufijo}`, password: 'Prueba12345', rol: 'administrador', id_papeleria: idPap });
   assert.equal(u.status, 201);
   tokens.otra = (await api(null, 'POST', '/auth/login', { usuario: `t_otra_${sufijo}`, password: 'Prueba12345' })).data.token;
+  await api('otra', 'POST', '/caja/abrir', { fondo_inicial: 0 });
 
   // la papelería nueva arranca con su cliente PG, sus reglas y sus clasificaciones, sin productos de las demás
   assert.equal((await api('otra', 'GET', '/clientes/codigo/PG')).status, 200);

@@ -6,6 +6,7 @@ const { pid } = require('../middleware/auth');
 const { siguienteFolio, movimiento, bitacora } = require('../services/registro');
 const { redondear } = require('../utils/http');
 const pac = require('../services/facturama');
+const { turnoAbierto } = require('./cortes.controller');
 
 const METODOS = ['efectivo', 'tarjeta', 'transferencia'];
 const ENTREGAS = ['mostrador', 'recoger'];
@@ -19,6 +20,9 @@ async function registrarVenta(conn, opts) {
   if (!ENTREGAS.includes(entrega)) throw new HttpError(400, 'Tipo de entrega inválido');
 
   const idPap = usuario.id_papeleria;
+  // Toda venta se cobra en la caja abierta del empleado: sin apertura de caja no se puede vender
+  const turno = await turnoAbierto(conn, idPap, usuario.id);
+  if (!turno) throw new HttpError(409, 'Abre tu caja antes de registrar ventas: cuenta el efectivo con el que empiezas', { caja_cerrada: true });
   const cliente = await calc.obtenerCliente(conn, idPap, id_cliente);
   // FOR UPDATE: bloquea los productos para que dos ventas al mismo tiempo no vendan la misma pieza
   let lineas = await calc.armarPartidas(conn, idPap, partidas, { bloquear: true });
@@ -48,10 +52,10 @@ async function registrarVenta(conn, opts) {
   const folio = await siguienteFolio(conn, idPap, 'venta');
   const [r] = await conn.query(
     `INSERT INTO ventas (id_papeleria, folio, id_cliente, id_usuario, id_cotizacion, subtotal, porcentaje_descuento, descuento, total,
-                         metodo_pago, pago_con, cambio, tipo_entrega, estado)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                         metodo_pago, pago_con, cambio, tipo_entrega, estado, id_turno)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [idPap, folio, cliente.id_cliente, usuario.id, id_cotizacion, t.subtotal, t.porcentaje_descuento, t.descuento, t.total,
-      metodo, pagoCon, cambio, entrega, estado]);
+      metodo, pagoCon, cambio, entrega, estado, turno.id_turno]);
   await conn.query(
     'INSERT INTO detalle_venta (id_venta, id_producto, cantidad, precio_unitario, importe) VALUES ?',
     [lineas.map((l) => [r.insertId, l.id_producto, l.cantidad, l.precio_unitario, l.importe])]);

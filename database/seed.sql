@@ -13,6 +13,8 @@ INSERT INTO papelerias (id_papeleria, nombre, giro, direccion, telefono) VALUES
 INSERT INTO configuracion (id_papeleria, clave, valor, descripcion)
 SELECT id_papeleria, 'dias_vigencia_cotizacion', IF(id_papeleria = 2, '10', '15'),
        'Días de vigencia de una cotización' FROM papelerias;
+INSERT INTO configuracion (id_papeleria, clave, valor, descripcion)
+SELECT id_papeleria, 'fondo_caja_sugerido', '500', 'Fondo de caja con el que normalmente se abre' FROM papelerias;
 
 -- Cada papelería tiene su cliente PG para ventas de mostrador sin registro
 INSERT INTO clientes (id_papeleria, codigo, nombre, porcentaje_descuento)
