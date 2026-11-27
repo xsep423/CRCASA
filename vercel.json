@@ -9,7 +9,8 @@
   ],
   "functions": {
     "api/index.js": {
-      "includeFiles": "node_modules/pdfkit/js/data/**"
+      "includeFiles": "node_modules/pdfkit/js/data/**",
+      "maxDuration": 30
     }
   }
 }
