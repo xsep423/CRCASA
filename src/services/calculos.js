@@ -71,20 +71,15 @@ function validarExistencia(lineas) {
 }
 
 // Descuento asignado por cliente (no se acumula con otros).
-// - Si no se envía porcentaje, se usa el del catálogo de clientes.
-// - Si el capturista lo cambia, puede ir de 0 hasta el tope (o hasta el % del cliente si es mayor).
+// Lo asigna el administrador en el catálogo de clientes y en la venta o cotización NO se puede cambiar:
+// siempre se aplica el del cliente. Si alguien intenta enviar otro porcentaje, se rechaza.
 async function resolverDescuento(conn, cliente, porcentajeSolicitado) {
   const asignado = Number(cliente.porcentaje_descuento);
-  if (porcentajeSolicitado === undefined || porcentajeSolicitado === null || porcentajeSolicitado === '') {
-    return asignado;
+  const vacio = porcentajeSolicitado === undefined || porcentajeSolicitado === null || porcentajeSolicitado === '';
+  if (!vacio && Number(porcentajeSolicitado) !== asignado) {
+    throw new HttpError(400, `El descuento no se puede cambiar en la operación: se aplica el asignado al cliente (${asignado}%)`);
   }
-  const pct = Number(porcentajeSolicitado);
-  const tope = await leerConfig(conn, cliente.id_papeleria, 'tope_descuento', 15);
-  const maximo = Math.max(tope, asignado);
-  if (isNaN(pct) || pct < 0 || pct > maximo) {
-    throw new HttpError(400, `El descuento debe estar entre 0% y ${maximo}%`);
-  }
-  return pct;
+  return asignado;
 }
 
 function totales(lineas, porcentaje) {

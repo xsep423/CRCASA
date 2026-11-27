@@ -42,7 +42,6 @@ const papelerias = {
       const [r] = await conn.query('INSERT INTO papelerias (nombre, giro, direccion, telefono, rfc) VALUES (?,?,?,?,?)', valores);
       const idPap = r.insertId;
       await conn.query('INSERT INTO configuracion (id_papeleria, clave, valor, descripcion) VALUES ?', [[
-        [idPap, 'tope_descuento', '15', 'Porcentaje máximo de descuento que puede aplicar el capturista en una operación'],
         [idPap, 'dias_vigencia_cotizacion', '15', 'Días de vigencia de una cotización'],
       ]]);
       await conn.query("INSERT INTO clientes (id_papeleria, codigo, nombre, porcentaje_descuento) VALUES (?, 'PG', 'Público en general', 0)", [idPap]);
@@ -121,10 +120,9 @@ const configuracion = {
     const [rows] = await pool.query('SELECT clave, valor FROM configuracion WHERE id_papeleria = ?', [pid(req)]);
     res.json(Object.fromEntries(rows.map((r) => [r.clave, Number(r.valor)])));
   },
-  // PUT { tope_descuento, dias_vigencia_cotizacion } (administrador)
+  // PUT { dias_vigencia_cotizacion } (administrador)
   async actualizar(req, res) {
     const reglas = {
-      tope_descuento: (v) => v >= 0 && v <= 100,
       dias_vigencia_cotizacion: (v) => Number.isInteger(v) && v >= 1 && v <= 90,
     };
     for (const [clave, valido] of Object.entries(reglas)) {

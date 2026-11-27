@@ -12,52 +12,58 @@
   <div id="nav"></div>
   <main class="container py-4">
     <h1 class="h4 mb-1">Reportes</h1>
-    <p class="text-muted no-print">Consulta las ventas de un periodo o el inventario actual y descárgalos en Excel (.xlsx) o PDF.</p>
-    <ul class="nav nav-tabs mb-3" id="tabs">
+    <p class="text-muted">Ventas de un periodo e inventario actual, divididos por categoría. Se descargan en Excel (.xlsx) o PDF con los mismos filtros.</p>
+    <ul class="nav nav-tabs mb-3">
       <li class="nav-item"><button class="nav-link active" data-tab="ventas"><i class="bi bi-graph-up"></i> Ventas</button></li>
       <li class="nav-item"><button class="nav-link" data-tab="inventario"><i class="bi bi-box-seam"></i> Inventario</button></li>
     </ul>
+
     <section id="tab-ventas">
-
-    <div class="card mb-3 no-print"><div class="card-body">
-      <div class="row g-2 align-items-end">
-        <div class="col-md-2"><label class="form-label">Desde</label><input id="desde" type="date" class="form-control"></div>
-        <div class="col-md-2"><label class="form-label">Hasta</label><input id="hasta" type="date" class="form-control"></div>
-        <div class="col-md-3"><label class="form-label">Agrupar por</label>
-          <select id="agrupar" class="form-select">
-            <option value="dia">Día</option><option value="empleado">Empleado</option><option value="metodo">Forma de pago</option>
-            <option value="clasificacion">Clasificación</option><option value="producto">Producto</option>
-          </select></div>
-        <div class="col-md-5 d-flex gap-2">
-          <button class="btn btn-primary" id="btn-consultar"><i class="bi bi-search"></i> Consultar</button>
-          <button class="btn btn-outline-success" data-exportar="ventas" data-formato="xlsx"><i class="bi bi-file-earmark-excel"></i> Excel</button>
-          <button class="btn btn-outline-danger" data-exportar="ventas" data-formato="pdf"><i class="bi bi-file-earmark-pdf"></i> PDF</button>
+      <div class="card mb-3"><div class="card-body">
+        <div class="row g-2 align-items-end">
+          <div class="col-6 col-md-2"><label class="form-label small">Desde</label><input id="desde" type="date" class="form-control form-control-sm"></div>
+          <div class="col-6 col-md-2"><label class="form-label small">Hasta</label><input id="hasta" type="date" class="form-control form-control-sm"></div>
+          <div class="col-md-2"><label class="form-label small">Ver por</label>
+            <select id="agrupar" class="form-select form-select-sm">
+              <option value="categoria">Categoría y producto</option><option value="producto">Producto</option>
+              <option value="dia">Día</option><option value="empleado">Empleado</option><option value="metodo">Forma de pago</option>
+            </select></div>
+          <div class="col-md-2"><label class="form-label small">Categoría</label><select id="f-categoria" class="form-select form-select-sm"><option value="">Todas</option></select></div>
+          <div class="col-md-2"><label class="form-label small">Empleado</label><select id="f-empleado" class="form-select form-select-sm"><option value="">Todos</option></select></div>
+          <div class="col-md-2"><label class="form-label small">Forma de pago</label><select id="f-metodo" class="form-select form-select-sm"><option value="">Todas</option></select></div>
         </div>
-      </div>
-    </div></div>
-
-    <div id="encabezado-impresion" class="d-none d-print-block mb-2"></div>
-    <div class="row g-3 mb-3" id="resumen"></div>
-    <div class="card"><div class="table-responsive">
-      <table class="table mb-0">
-        <thead class="table-light"><tr><th id="col-grupo">Día</th><th class="text-end">Ventas</th><th class="text-end">Piezas</th><th class="money">Importe</th><th style="width:30%" class="no-print"></th></tr></thead>
-        <tbody id="filas"></tbody>
-        <tfoot class="table-light"><tr><th>Total</th><th class="text-end" id="f-ventas"></th><th class="text-end" id="f-piezas"></th><th class="money" id="f-total"></th><th class="no-print"></th></tr></tfoot>
-      </table>
-    </div></div>
-    <p class="small text-muted mt-2" id="nota-importe"></p>
+        <div class="d-flex gap-2 mt-2">
+          <button class="btn btn-sm btn-primary" id="btn-consultar"><i class="bi bi-search"></i> Consultar</button>
+          <button class="btn btn-sm btn-outline-success ms-auto" data-exportar="ventas" data-formato="xlsx"><i class="bi bi-file-earmark-excel"></i> Excel</button>
+          <button class="btn btn-sm btn-outline-danger" data-exportar="ventas" data-formato="pdf"><i class="bi bi-file-earmark-pdf"></i> PDF</button>
+        </div>
+      </div></div>
+      <div class="row g-2 mb-3" id="resumen"></div>
+      <div class="card"><div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead class="table-light"><tr><th id="col-grupo">Categoría / producto</th><th class="text-end">Ventas</th><th class="text-end">Piezas</th>
+            <th class="money">Importe</th><th class="text-end">% del total</th><th style="width:22%"></th></tr></thead>
+          <tbody id="filas"></tbody>
+          <tfoot class="table-light"><tr><th>Total</th><th class="text-end" id="f-ventas"></th><th class="text-end" id="f-piezas"></th><th class="money" id="f-total"></th><th class="text-end">100 %</th><th></th></tr></tfoot>
+        </table>
+      </div></div>
+      <p class="small text-muted mt-2" id="nota"></p>
     </section>
 
     <section id="tab-inventario" class="d-none">
-      <div class="d-flex gap-2 mb-3">
-        <button class="btn btn-outline-success" data-exportar="inventario" data-formato="xlsx"><i class="bi bi-file-earmark-excel"></i> Excel</button>
-        <button class="btn btn-outline-danger" data-exportar="inventario" data-formato="pdf"><i class="bi bi-file-earmark-pdf"></i> PDF</button>
-      </div>
-      <div class="row g-3 mb-3" id="inv-resumen"></div>
+      <div class="card mb-3"><div class="card-body d-flex flex-wrap gap-3 align-items-end">
+        <div><label class="form-label small">Categoría</label><select id="i-categoria" class="form-select form-select-sm"><option value="">Todas</option></select></div>
+        <div class="form-check mb-1"><input class="form-check-input" type="checkbox" id="i-reabastecer"><label class="form-check-label small" for="i-reabastecer">Solo por reabastecer</label></div>
+        <div class="ms-auto d-flex gap-2">
+          <button class="btn btn-sm btn-outline-success" data-exportar="inventario" data-formato="xlsx"><i class="bi bi-file-earmark-excel"></i> Excel</button>
+          <button class="btn btn-sm btn-outline-danger" data-exportar="inventario" data-formato="pdf"><i class="bi bi-file-earmark-pdf"></i> PDF</button>
+        </div>
+      </div></div>
+      <div class="row g-2 mb-3" id="inv-resumen"></div>
       <div class="card"><div class="table-responsive">
         <table class="table table-sm mb-0">
-          <thead class="table-light"><tr><th>Código</th><th>Producto</th><th>Clasificación</th><th class="text-end">Existencia</th>
-            <th class="text-end">Mínimo</th><th class="money">Costo</th><th class="money">Precio</th><th class="money">Valor a costo</th><th></th></tr></thead>
+          <thead class="table-light"><tr><th>Código</th><th>Producto</th><th class="text-end">Existencia</th><th class="text-end">Mínimo</th>
+            <th class="money">Costo</th><th class="money">Precio</th><th class="money">Valor a costo</th><th class="money">Valor a precio</th><th></th></tr></thead>
           <tbody id="inv-filas"></tbody>
         </table>
       </div></div>
@@ -66,59 +72,76 @@
   <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
   <script src="/js/app.js"></script>
   <script>
-    const yo = requerirSesion(['administrador', 'soporte']);
+    requerirSesion(['administrador', 'soporte']);
     const $ = (id) => document.getElementById(id);
-    const NOMBRES = { dia: 'Día', empleado: 'Empleado', metodo: 'Forma de pago', clasificacion: 'Clasificación', producto: 'Producto' };
-    let datos = null;
+    const COLUMNA = { categoria: 'Categoría / producto', producto: 'Producto', dia: 'Día', empleado: 'Empleado', metodo: 'Forma de pago' };
+    const METODOS = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia' };
+    const pct = (n) => `${Number(n).toFixed(1)} %`;
+    const tarjeta = (t, v) => `<div class="col-6 col-md"><div class="card"><div class="card-body py-2">
+      <div class="small text-muted">${t}</div><div class="fs-5 fw-bold">${v}</div></div></div></div>`;
+    const barra = (n) => `<div class="progress" style="height:8px"><div class="progress-bar" style="width:${Math.min(100, n)}%"></div></div>`;
 
     const hoy = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
     $('desde').value = hoy.slice(0, 8) + '01';
     $('hasta').value = hoy;
 
-    const etiqueta = (g) => (datos.agrupar === 'dia' ? fechaCorta(g) : datos.agrupar === 'metodo' ? g[0].toUpperCase() + g.slice(1) : g);
+    function filtrosVentas() {
+      const q = new URLSearchParams({ desde: $('desde').value, hasta: $('hasta').value, agrupar: $('agrupar').value });
+      if ($('f-categoria').value) q.set('categoria', $('f-categoria').value);
+      if ($('f-empleado').value) q.set('empleado', $('f-empleado').value);
+      if ($('f-metodo').value) q.set('metodo', $('f-metodo').value);
+      return q;
+    }
 
     async function consultar() {
       try {
-        const q = new URLSearchParams({ desde: $('desde').value, hasta: $('hasta').value, agrupar: $('agrupar').value });
-        datos = await API.get('/reportes/ventas?' + q);
-        const r = datos.resumen;
-        const tarjeta = (t, v, extra = '') => `<div class="col-6 col-md-3"><div class="card"><div class="card-body py-2">
-          <div class="small text-muted">${t}</div><div class="fs-4 fw-bold">${v}</div><div class="small text-muted">${extra}</div></div></div></div>`;
-        $('resumen').innerHTML = tarjeta('Ventas', r.ventas, `${r.canceladas} cancelada(s)`) + tarjeta('Vendido', dinero(r.total))
-          + tarjeta('Descuentos otorgados', dinero(r.descuentos)) + tarjeta('Ticket promedio', dinero(r.ventas ? r.total / r.ventas : 0));
-        $('col-grupo').textContent = NOMBRES[datos.agrupar];
-        const max = Math.max(...datos.filas.map((f) => Number(f.total)), 1);
-        $('filas').innerHTML = datos.filas.map((f) => `<tr><td>${esc(etiqueta(f.grupo))}</td><td class="text-end">${f.ventas}</td>
-          <td class="text-end">${Number(f.piezas)}</td><td class="money">${dinero(f.total)}</td>
-          <td class="no-print"><div class="bg-primary rounded" style="height:10px;width:${(Number(f.total) / max) * 100}%;opacity:.7"></div></td></tr>`).join('')
-          || '<tr><td colspan="5" class="text-center text-muted py-4">Sin ventas en el periodo</td></tr>';
-        const detalle = ['clasificacion', 'producto'].includes(datos.agrupar);
-        $('f-ventas').textContent = detalle ? '' : r.ventas;
-        $('f-piezas').textContent = datos.filas.reduce((s, f) => s + Number(f.piezas), 0);
-        $('f-total').textContent = dinero(datos.filas.reduce((s, f) => s + Number(f.total), 0));
-        $('nota-importe').textContent = detalle ? 'Por clasificación y producto, el importe de cada renglón ya lleva aplicado el descuento de su venta. Una venta puede contar en varias filas.' : '';
-        $('encabezado-impresion').innerHTML = `<h2 class="h5 mb-0">${esc(yo.papeleria || '')} · Reporte de ventas por ${NOMBRES[datos.agrupar].toLowerCase()}</h2>
-          <small>Del ${fechaCorta(datos.desde)} al ${fechaCorta(datos.hasta)}</small>`;
+        const d = await API.get('/reportes/ventas?' + filtrosVentas());
+        const r = d.resumen;
+        $('resumen').innerHTML = tarjeta('Ventas', r.ventas) + tarjeta('Piezas', r.piezas) + tarjeta('Vendido', dinero(r.total))
+          + tarjeta('Descuentos', dinero(r.descuentos)) + tarjeta('Canceladas', r.canceladas);
+        $('col-grupo').textContent = COLUMNA[d.agrupar];
+        const fila = (nombre, x, clase = '') => `<tr class="${clase}"><td>${nombre}</td><td class="text-end">${x.ventas}</td>
+          <td class="text-end">${x.piezas}</td><td class="money">${dinero(x.total)}</td><td class="text-end">${pct(x.porcentaje)}</td><td>${barra(x.porcentaje)}</td></tr>`;
+        if (d.agrupar === 'categoria') {
+          $('filas').innerHTML = d.categorias.map((c) =>
+            fila(`<strong>${esc(c.categoria)}</strong> <small class="text-muted">(${c.productos.length} producto${c.productos.length === 1 ? '' : 's'})</small>`, c, 'table-primary fw-bold')
+            + c.productos.map((p) => fila(`<span class="ps-3 d-inline-block"><code>${esc(p.codigo)}</code> ${esc(p.nombre)}</span>`, p)).join('')).join('');
+        } else {
+          const nombre = (g) => d.agrupar === 'dia' ? fechaCorta(g) : d.agrupar === 'metodo' ? METODOS[g] || g : esc(g);
+          $('filas').innerHTML = d.filas.map((x) => fila(nombre(x.grupo), x)).join('');
+        }
+        if (!$('filas').innerHTML) $('filas').innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Sin ventas con esos filtros</td></tr>';
+        $('f-ventas').textContent = r.ventas;
+        $('f-piezas').textContent = r.piezas;
+        $('f-total').textContent = dinero(r.total);
+        $('nota').textContent = d.porProducto
+          ? 'El importe de cada producto ya lleva aplicado el descuento de su venta. Una venta con productos de varias categorías cuenta en cada una.'
+          : 'No incluye ventas canceladas.';
       } catch (err) { avisarError(err); }
     }
 
     async function inventario() {
       try {
-        const d = await API.get('/reportes/inventario');
-        const tarjeta = (t, v) => `<div class="col-6 col-md"><div class="card"><div class="card-body py-2">
-          <div class="small text-muted">${t}</div><div class="fs-5 fw-bold">${v}</div></div></div></div>`;
+        const q = new URLSearchParams();
+        if ($('i-categoria').value) q.set('categoria', $('i-categoria').value);
+        if ($('i-reabastecer').checked) q.set('reabastecer', '1');
+        const d = await API.get('/reportes/inventario?' + q);
         $('inv-resumen').innerHTML = tarjeta('Productos', d.resumen.productos) + tarjeta('Piezas', d.resumen.piezas)
           + tarjeta('Valor a costo', dinero(d.resumen.valor_costo)) + tarjeta('Valor a precio de venta', dinero(d.resumen.valor_venta))
           + tarjeta('Por reabastecer', d.resumen.por_reabastecer);
-        $('inv-filas').innerHTML = d.filas.map((p) => `<tr><td>${esc(p.codigo)}</td><td>${esc(p.nombre)}</td><td>${esc(p.clasificacion)}</td>
-          <td class="text-end">${p.existencia}</td><td class="text-end">${p.existencia_minima}</td><td class="money">${dinero(p.costo)}</td>
-          <td class="money">${dinero(p.precio_venta)}</td><td class="money">${dinero(p.valor_costo)}</td>
-          <td>${p.alerta ? '<span class="badge text-bg-warning">Reabastecer</span>' : ''}</td></tr>`).join('')
-          || '<tr><td colspan="9" class="text-center text-muted py-4">Sin productos</td></tr>';
+        $('inv-filas').innerHTML = d.categorias.map((c) => `<tr class="table-primary fw-bold"><td colspan="2">${esc(c.categoria)}
+            <small class="text-muted fw-normal">(${c.productos} producto${c.productos === 1 ? '' : 's'})</small></td><td class="text-end">${c.existencia}</td>
+            <td></td><td></td><td></td><td class="money">${dinero(c.valor_costo)}</td><td class="money">${dinero(c.valor_venta)}</td>
+            <td>${c.por_reabastecer ? `<span class="badge text-bg-warning">${c.por_reabastecer} por reabastecer</span>` : ''}</td></tr>`
+          + c.lista.map((p) => `<tr><td class="ps-3"><code>${esc(p.codigo)}</code></td><td>${esc(p.nombre)}</td>
+            <td class="text-end ${p.alerta ? 'text-danger fw-bold' : ''}">${p.existencia}</td><td class="text-end">${p.existencia_minima}</td>
+            <td class="money">${dinero(p.costo)}</td><td class="money">${dinero(p.precio_venta)}</td><td class="money">${dinero(p.valor_costo)}</td>
+            <td class="money">${dinero(p.valor_venta)}</td><td>${p.alerta ? '<span class="badge text-bg-warning">Reabastecer</span>' : ''}</td></tr>`).join('')).join('')
+          || '<tr><td colspan="9" class="text-center text-muted py-4">Sin productos con esos filtros</td></tr>';
       } catch (err) { avisarError(err); }
     }
 
-    // Pestañas Ventas / Inventario
+    // Pestañas
     document.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => {
       document.querySelectorAll('[data-tab]').forEach((x) => x.classList.toggle('active', x === b));
       $('tab-ventas').classList.toggle('d-none', b.dataset.tab !== 'ventas');
@@ -126,21 +149,38 @@
       if (b.dataset.tab === 'inventario') inventario();
     }));
 
-    // Descarga real del archivo generado por el servidor (.xlsx con formato o .pdf)
+    // Descarga del archivo con los mismos filtros que se ven en pantalla
     document.querySelectorAll('[data-exportar]').forEach((b) => b.addEventListener('click', async () => {
-      const q = new URLSearchParams({ formato: b.dataset.formato });
-      if (b.dataset.exportar === 'ventas') {
-        q.set('desde', $('desde').value); q.set('hasta', $('hasta').value); q.set('agrupar', $('agrupar').value);
+      let q;
+      if (b.dataset.exportar === 'ventas') q = filtrosVentas();
+      else {
+        q = new URLSearchParams();
+        if ($('i-categoria').value) q.set('categoria', $('i-categoria').value);
+        if ($('i-reabastecer').checked) q.set('reabastecer', '1');
       }
+      q.set('formato', b.dataset.formato);
       const original = b.innerHTML;
       b.disabled = true;
-      b.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generando…';
+      b.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
       try { await API.descargar(`/reportes/${b.dataset.exportar}/exportar?${q}`); } catch (err) { avisarError(err); }
       finally { b.disabled = false; b.innerHTML = original; }
     }));
+
     $('btn-consultar').addEventListener('click', consultar);
-    $('agrupar').addEventListener('change', consultar);
-    consultar();
+    ['agrupar', 'f-categoria', 'f-empleado', 'f-metodo'].forEach((id) => $(id).addEventListener('change', consultar));
+    ['i-categoria', 'i-reabastecer'].forEach((id) => $(id).addEventListener('change', inventario));
+
+    (async () => {
+      try {
+        const op = await API.get('/reportes/opciones');
+        const opciones = (lista) => lista.map((x) => `<option value="${x.id}">${esc(x.nombre)}</option>`).join('');
+        $('f-categoria').insertAdjacentHTML('beforeend', opciones(op.categorias));
+        $('i-categoria').insertAdjacentHTML('beforeend', opciones(op.categorias));
+        $('f-empleado').insertAdjacentHTML('beforeend', opciones(op.empleados));
+        $('f-metodo').insertAdjacentHTML('beforeend', Object.entries(op.metodos).map(([k, v]) => `<option value="${k}">${v}</option>`).join(''));
+      } catch (err) { avisarError(err); }
+      consultar();
+    })();
   </script>
 </body>
 </html>

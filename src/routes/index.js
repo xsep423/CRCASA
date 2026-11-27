@@ -96,6 +96,7 @@ router.get('/configuracion', todos, m(admin.configuracion.obtener));
 router.put('/configuracion', soloAdmin, m(admin.configuracion.actualizar));
 router.get('/resumen', soloAdmin, m(admin.resumen));
 router.get('/reportes/ventas', soloAdmin, m(reportes.ventas));
+router.get('/reportes/opciones', soloAdmin, m(reportes.opciones));
 router.get('/reportes/ventas/exportar', soloAdmin, m(reportes.exportarVentas));
 router.get('/reportes/inventario', soloAdmin, m(reportes.inventario));
 router.get('/reportes/inventario/exportar', soloAdmin, m(reportes.exportarInventario));

@@ -30,15 +30,13 @@
 
     <div class="row g-3">
       <div class="col-lg-4"><div class="card"><div class="card-body">
-        <h2 class="h6">Reglas de descuento y cotización</h2>
+        <h2 class="h6">Reglas de cotización</h2>
         <form id="form-config">
-          <label class="form-label">Tope de descuento que puede aplicar el capturista (%)</label>
-          <input name="tope_descuento" type="number" min="0" max="100" step="0.5" class="form-control mb-2">
           <label class="form-label">Días de vigencia de una cotización</label>
           <input name="dias_vigencia_cotizacion" type="number" min="1" max="90" class="form-control mb-3">
           <button class="btn btn-primary">Guardar</button>
         </form>
-        <p class="form-text mt-2 mb-0">El descuento de cada cliente se asigna en <a href="/clientes.html">Clientes</a>. Los descuentos no se acumulan.</p>
+        <p class="form-text mt-2 mb-0">El descuento de cada cliente lo asigna el administrador en <a href="/clientes.html">Clientes</a> y se aplica solo en cada venta y cotización; nadie lo puede cambiar al capturar.</p>
       </div></div></div>
       <div class="col-lg-8">
         <h2 class="h6">Clasificaciones de productos</h2>
@@ -69,7 +67,6 @@
         <td class="money">${dinero(p.importe)}</td></tr>`).join('') || '<tr><td colspan="3" class="text-muted">Sin ventas recientes</td></tr>';
 
       const cfg = await API.get('/configuracion');
-      $('form-config').tope_descuento.value = cfg.tope_descuento;
       $('form-config').dias_vigencia_cotizacion.value = cfg.dias_vigencia_cotizacion;
     })().catch(avisarError);
 

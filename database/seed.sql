@@ -11,9 +11,6 @@ INSERT INTO papelerias (id_papeleria, nombre, giro, direccion, telefono) VALUES
 
 -- Reglas de cada papelería (cada administrador puede cambiarlas desde su panel)
 INSERT INTO configuracion (id_papeleria, clave, valor, descripcion)
-SELECT id_papeleria, 'tope_descuento', IF(id_papeleria = 3, '10', '15'),
-       'Porcentaje máximo de descuento que puede aplicar el capturista en una operación' FROM papelerias;
-INSERT INTO configuracion (id_papeleria, clave, valor, descripcion)
 SELECT id_papeleria, 'dias_vigencia_cotizacion', IF(id_papeleria = 2, '10', '15'),
        'Días de vigencia de una cotización' FROM papelerias;
 

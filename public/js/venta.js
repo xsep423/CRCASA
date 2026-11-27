@@ -5,8 +5,9 @@ const $ = (id) => document.getElementById(id);
 const estado = {
   cliente: null,          // { id_cliente, codigo, nombre, porcentaje_descuento }
   partidas: [],           // { id_producto, codigo, nombre, precio_unitario, existencia, cantidad }
-  pct: 0,                 // descuento que se aplicará en esta operación
-  tope: 15,
+  pct: 0,                 // descuento del cliente (fijo: lo asigna el administrador)
+  productos: [],          // catálogo completo de la papelería
+  categoria: '',          // filtro de categoría del catálogo
   idCotizacion: null,     // si se está editando una cotización
 };
 const modales = {
@@ -20,34 +21,27 @@ const r2 = (n) => Math.round(n * 100) / 100;
 function ponerCliente(c, pct) {
   estado.cliente = c;
   estado.pct = pct !== undefined ? Number(pct) : Number(c.porcentaje_descuento);
-  $('codigo-cliente').value = c.codigo;
-  $('cliente-info').innerHTML = `<strong>${esc(c.nombre)}</strong>
-    <span class="badge text-bg-${Number(c.porcentaje_descuento) > 0 ? 'success' : 'secondary'}">
-      Descuento asignado: ${Number(c.porcentaje_descuento)}%</span>`;
+  $('cliente-info').innerHTML = `<div class="d-flex justify-content-between align-items-center">
+    <div><strong>${esc(c.nombre)}</strong><br><small class="text-muted">${esc(c.codigo)}${c.rfc ? ' · RFC ' + esc(c.rfc) : ''}</small></div>
+    <span class="badge text-bg-${Number(c.porcentaje_descuento) > 0 ? 'success' : 'secondary'}">Descuento ${Number(c.porcentaje_descuento)}%</span></div>`;
   pintar();
 }
 
 async function cargarClientePorCodigo(codigo) {
   try {
     ponerCliente(await API.get(`/clientes/codigo/${encodeURIComponent(codigo)}`));
-    $('buscar-producto').focus();
   } catch (err) {
     avisarError(err);
-    $('codigo-cliente').select();
   }
 }
-
-$('codigo-cliente').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && e.target.value.trim()) cargarClientePorCodigo(e.target.value.trim());
-});
 
 async function buscarClientes() {
   const q = $('q-cliente').value.trim();
   const lista = await API.get('/clientes' + (q ? `?buscar=${encodeURIComponent(q)}` : ''));
   $('lista-clientes').innerHTML = lista.map((c) => `
-    <button class="list-group-item list-group-item-action d-flex justify-content-between" data-codigo="${esc(c.codigo)}">
-      <span><strong>${esc(c.codigo)}</strong> · ${esc(c.nombre)} <small class="text-muted">${esc(c.telefono || '')}</small></span>
-      <span class="badge text-bg-light">${Number(c.porcentaje_descuento)}%</span>
+    <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" data-codigo="${esc(c.codigo)}">
+      <span><strong>${esc(c.nombre)}</strong><br><small class="text-muted">${esc(c.codigo)}${c.telefono ? ' · ' + esc(c.telefono) : ''}</small></span>
+      <span class="badge text-bg-${Number(c.porcentaje_descuento) > 0 ? 'success' : 'light'}">${Number(c.porcentaje_descuento)}%</span>
     </button>`).join('') || '<p class="text-muted">Sin resultados</p>';
 }
 $('btn-buscar-cliente').addEventListener('click', () => { modales.buscar.show(); buscarClientes(); setTimeout(() => $('q-cliente').focus(), 300); });
@@ -72,61 +66,69 @@ $('form-cliente').addEventListener('submit', async (e) => {
 });
 
 // ---------------- Productos ----------------
-function agregar(prod, cantidad) {
-  cantidad = Math.max(1, parseInt(cantidad, 10) || 1);
+// Se cargan TODOS los productos de la papelería y se eligen de la lista; el buscador y las
+// categorías solo filtran. Escribir un código exacto y presionar Enter también lo agrega.
+async function cargarCatalogo() {
+  estado.productos = await API.get('/productos');
+  const cats = [...new Set(estado.productos.map((p) => p.clasificacion))].sort();
+  $('categorias').innerHTML = ['', ...cats].map((c) => `<button class="btn btn-sm ${c === estado.categoria ? 'btn-primary' : 'btn-outline-secondary'}" data-cat="${esc(c)}">${c ? esc(c) : 'Todas'}</button>`).join('');
+  pintarCatalogo();
+}
+
+function enLista(id) {
+  return estado.partidas.find((p) => p.id_producto === id)?.cantidad || 0;
+}
+
+function pintarCatalogo() {
+  const q = $('buscar-producto').value.trim().toLowerCase();
+  const lista = estado.productos.filter((p) => (!estado.categoria || p.clasificacion === estado.categoria)
+    && (!q || p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q)));
+  $('conteo-productos').textContent = `${lista.length} de ${estado.productos.length}`;
+  $('catalogo').innerHTML = lista.map((p) => {
+    const lleva = enLista(p.id_producto);
+    const agotado = p.existencia <= 0;
+    return `<tr data-id="${p.id_producto}" class="${agotado ? 'agotado' : ''}">
+      <td><code>${esc(p.codigo)}</code></td>
+      <td>${esc(p.nombre)}<br><small class="text-muted">${esc(p.clasificacion)}</small></td>
+      <td class="money">${dinero(p.precio_venta)}</td>
+      <td class="text-end ${p.existencia <= p.existencia_minima ? 'text-danger fw-bold' : ''}">${agotado ? 'Agotado' : p.existencia}</td>
+      <td class="text-end">${lleva ? `<span class="badge text-bg-primary me-1">${lleva}</span>` : ''}<button class="btn btn-sm btn-primary" ${agotado ? 'disabled' : ''} title="Agregar"><i class="bi bi-plus-lg"></i></button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" class="text-center text-muted py-4">Ningún producto coincide</td></tr>';
+}
+
+function agregar(prod, cantidad = 1) {
   const ya = estado.partidas.find((p) => p.id_producto === prod.id_producto);
   if (ya) ya.cantidad += cantidad;
   else estado.partidas.push({
     id_producto: prod.id_producto, codigo: prod.codigo, nombre: prod.nombre,
     precio_unitario: Number(prod.precio_venta ?? prod.precio_unitario), existencia: prod.existencia, cantidad,
   });
-  $('buscar-producto').value = '';
-  $('cantidad').value = 1;
-  $('resultados-busqueda').classList.add('d-none');
-  $('buscar-producto').focus();
   pintar();
 }
 
-let resultados = [];
-async function buscarProductos(q) {
-  resultados = q.length >= 2 ? await API.get(`/productos?buscar=${encodeURIComponent(q)}`) : [];
-  const caja = $('resultados-busqueda');
-  caja.innerHTML = resultados.slice(0, 12).map((p, i) => `
-    <button class="list-group-item list-group-item-action d-flex justify-content-between" data-i="${i}">
-      <span><strong>${esc(p.codigo)}</strong> · ${esc(p.nombre)}</span>
-      <span>${dinero(p.precio_venta)} <small class="text-muted">· ${p.existencia} pzas</small></span>
-    </button>`).join('');
-  caja.classList.toggle('d-none', !resultados.length);
-}
-
-let tBusqueda;
-$('buscar-producto').addEventListener('input', (e) => {
-  clearTimeout(tBusqueda);
-  tBusqueda = setTimeout(() => buscarProductos(e.target.value.trim()).catch(avisarError), 200);
+$('catalogo').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-id]');
+  if (!tr || tr.classList.contains('agotado')) return;
+  agregar(estado.productos.find((p) => p.id_producto === Number(tr.dataset.id)));
 });
+$('categorias').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-cat]');
+  if (!b) return;
+  estado.categoria = b.dataset.cat;
+  $('categorias').querySelectorAll('[data-cat]').forEach((x) => x.className = `btn btn-sm ${x === b ? 'btn-primary' : 'btn-outline-secondary'}`);
+  pintarCatalogo();
+});
+$('buscar-producto').addEventListener('input', pintarCatalogo);
 $('buscar-producto').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') { e.preventDefault(); agregarDesdeInput(); }
-  if (e.key === 'ArrowDown') $('resultados-busqueda').querySelector('button')?.focus();
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const q = e.target.value.trim().toLowerCase();
+  const exacto = estado.productos.find((p) => p.codigo.toLowerCase() === q);
+  const visibles = estado.productos.filter((p) => p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q));
+  const prod = exacto || (visibles.length === 1 ? visibles[0] : null);
+  if (prod && prod.existencia > 0) { agregar(prod); e.target.value = ''; pintarCatalogo(); }
 });
-$('cantidad').addEventListener('keydown', (e) => { if (e.key === 'Enter') agregarDesdeInput(); });
-$('btn-agregar').addEventListener('click', agregarDesdeInput);
-$('resultados-busqueda').addEventListener('click', (e) => {
-  const b = e.target.closest('[data-i]');
-  if (b) agregar(resultados[b.dataset.i], $('cantidad').value);
-});
-
-// Enter: primero intenta código exacto (lector de barras); si no, toma el único resultado
-async function agregarDesdeInput() {
-  const q = $('buscar-producto').value.trim();
-  if (!q) return;
-  try {
-    agregar(await API.get(`/productos/codigo/${encodeURIComponent(q)}`), $('cantidad').value);
-  } catch {
-    await buscarProductos(q);
-    if (resultados.length === 1) agregar(resultados[0], $('cantidad').value);
-    else if (!resultados.length) avisar('No se encontró ningún producto', 'warning');
-  }
-}
 
 // Cambiar cantidad o quitar un producto de la lista
 $('partidas').addEventListener('change', (e) => {
@@ -143,45 +145,30 @@ $('partidas').addEventListener('click', (e) => {
   pintar();
 });
 
-// ---------------- Descuento y totales ----------------
-$('pct').addEventListener('input', (e) => {
-  estado.pct = Number(e.target.value) || 0;
-  pintar(false);
-});
-
-function maximoDescuento() {
-  return Math.max(estado.tope, Number(estado.cliente?.porcentaje_descuento || 0));
-}
-
-function pintar(actualizarInputPct = true) {
+// ---------------- Totales ----------------
+// El descuento es el que el administrador asignó al cliente: se muestra pero no se puede cambiar.
+function pintar() {
   $('partidas').innerHTML = estado.partidas.map((p, i) => {
     const falta = p.cantidad > p.existencia;
     return `<tr class="${falta ? 'table-warning' : ''}">
-      <td><code>${esc(p.codigo)}</code></td>
-      <td>${esc(p.nombre)} ${falta ? `<br><small class="text-danger">Existencia: ${p.existencia} pzas</small>` : ''}</td>
+      <td>${esc(p.nombre)}<br><small class="text-muted">${esc(p.codigo)} · ${dinero(p.precio_unitario)}</small>
+        ${falta ? `<br><small class="text-danger">Solo hay ${p.existencia} pzas</small>` : ''}</td>
       <td><input type="number" min="0" class="form-control form-control-sm cantidad" data-i="${i}" value="${p.cantidad}"></td>
-      <td class="money">${dinero(p.precio_unitario)}</td>
       <td class="money">${dinero(p.precio_unitario * p.cantidad)}</td>
       <td class="text-end"><button class="btn btn-sm btn-outline-danger" data-quitar="${i}" title="Quitar"><i class="bi bi-x-lg"></i></button></td>
     </tr>`;
-  }).join('') || '<tr><td colspan="6" class="text-center text-muted py-4">Escanea o escribe el código de un producto</td></tr>';
+  }).join('') || '<tr><td colspan="4" class="text-center text-muted py-3">Elige productos de la lista</td></tr>';
 
   const subtotal = r2(estado.partidas.reduce((s, p) => s + p.precio_unitario * p.cantidad, 0));
-  const max = maximoDescuento();
-  const pctValido = estado.pct >= 0 && estado.pct <= max;
-  const descuento = pctValido ? r2(subtotal * estado.pct / 100) : 0;
+  const descuento = r2(subtotal * estado.pct / 100);
   $('t-subtotal').textContent = dinero(subtotal);
+  $('t-pct').innerHTML = `<i class="bi bi-lock-fill"></i> ${estado.pct}%`;
   $('t-descuento').textContent = '-' + dinero(descuento);
   $('t-total').textContent = dinero(subtotal - descuento);
-  estado.total = Math.round((subtotal - descuento) * 100) / 100;
+  estado.total = r2(subtotal - descuento);
   actualizarCambio();
-  if (actualizarInputPct) $('pct').value = estado.pct;
-  $('pct').max = max;
-  $('pct').classList.toggle('is-invalid', !pctValido);
-  $('ayuda-descuento').innerHTML = estado.cliente
-    ? `Asignado al cliente: <strong>${Number(estado.cliente.porcentaje_descuento)}%</strong> · Máximo permitido: ${max}%`
-    : '';
   $('faltantes').classList.add('d-none');
+  if (estado.productos.length) pintarCatalogo();
 }
 
 // ---------------- Cobro en efectivo ----------------
@@ -202,11 +189,9 @@ $('metodo').addEventListener('change', actualizarCambio);
 function cuerpo() {
   if (!estado.cliente) throw new Error('Selecciona un cliente');
   if (!estado.partidas.length) throw new Error('Agrega al menos un producto');
-  if (estado.pct < 0 || estado.pct > maximoDescuento()) throw new Error(`El descuento debe estar entre 0% y ${maximoDescuento()}%`);
   return {
     id_cliente: estado.cliente.id_cliente,
     partidas: estado.partidas.map((p) => ({ id_producto: p.id_producto, cantidad: p.cantidad })),
-    porcentaje_descuento: estado.pct,
   };
 }
 
@@ -264,7 +249,9 @@ function limpiar() {
   $('metodo').value = 'efectivo';
   $('pago-con').value = '';
   $('entrega').value = 'mostrador';
+  $('buscar-producto').value = '';
   cargarClientePorCodigo('PG');
+  cargarCatalogo().catch(avisarError); // las existencias cambiaron con la venta
 }
 
 $('btn-venta').addEventListener('click', registrarVenta);
@@ -282,7 +269,7 @@ document.addEventListener('keydown', (e) => {
 // ---------------- Inicio ----------------
 (async () => {
   try {
-    estado.tope = (await API.get('/configuracion')).tope_descuento ?? 15;
+    await cargarCatalogo();
     const id = new URLSearchParams(location.search).get('cotizacion');
     if (id) {
       const c = await API.get(`/cotizaciones/${id}`);
@@ -296,7 +283,7 @@ document.addEventListener('keydown', (e) => {
       $('btn-venta').querySelector('span').textContent = 'Convertir en venta';
       $('btn-cotizacion').querySelector('span').textContent = 'Guardar cambios';
       estado.partidas = c.partidas.map((p) => ({ ...p, precio_unitario: Number(p.precio_unitario) }));
-      ponerCliente(await API.get(`/clientes/${c.id_cliente}`), c.porcentaje_descuento);
+      ponerCliente(await API.get(`/clientes/${c.id_cliente}`));
     } else {
       await cargarClientePorCodigo('PG');
     }

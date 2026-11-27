@@ -4,9 +4,9 @@
 //   reporte = {
 //     titulo, subtitulo, papeleria,
 //     resumen:  [{ etiqueta, valor }],                     // tarjetas de arriba (opcional)
-//     columnas: [{ titulo, clave, tipo: 'texto'|'numero'|'dinero'|'fecha', ancho }],
-//     filas:    [{ ...valores por clave }],
-//     totales:  { clave: valor },                         // renglón final (opcional)
+//     columnas: [{ titulo, clave, sinFormula?, tipo: 'texto'|'numero'|'dinero'|'fecha', ancho }],
+//     filas:    [{ ...valores por clave, _tipo?: 'grupo'|'subtotal' }],  // grupo = encabezado de categoría
+//     totales:  { clave: valor | 'SUMA' | 'SUBTOTALES' },  // renglón final (opcional)
 //     nota,                                                // texto al pie (opcional)
 //   }
 const ExcelJS = require('exceljs');
@@ -20,6 +20,7 @@ function texto(valor, tipo) {
   if (valor === null || valor === undefined) return '';
   if (tipo === 'dinero') return dinero(valor);
   if (tipo === 'numero') return Number(valor).toLocaleString('es-MX');
+  if (tipo === 'porcentaje') return `${Number(valor).toFixed(1)} %`;
   if (tipo === 'fecha') return fechaTexto(valor);
   return String(valor);
 }
@@ -59,18 +60,47 @@ async function excel(r) {
   });
   hoja.views = [{ state: 'frozen', ySplit: filaEnc }];
 
+  const numerica = (c) => ['dinero', 'numero'].includes(c.tipo);
+  const filasSubtotal = [];
+  let inicioGrupo = null;
   for (const f of r.filas) {
     fila++;
+    if (f._tipo === 'grupo') {
+      inicioGrupo = fila + 1;
+      r.columnas.forEach((c, i) => {
+        const celda = hoja.getCell(fila, i + 1);
+        celda.value = i === 0 ? (f[c.clave] ?? f[r.columnas[1]?.clave] ?? '') : null;
+        celda.font = { bold: true, color: { argb: 'FF' + AZUL } };
+        celda.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCE6F1' } };
+      });
+      if (!hoja.getCell(fila, 1).value) {
+        // el nombre de la categoría puede venir en otra columna (inventario usa "nombre")
+        const conValor = r.columnas.find((c) => f[c.clave]);
+        hoja.getCell(fila, 1).value = conValor ? f[conValor.clave] : '';
+      }
+      continue;
+    }
     r.columnas.forEach((c, i) => {
       const celda = hoja.getCell(fila, i + 1);
       const v = f[c.clave];
-      if (c.tipo === 'dinero' || c.tipo === 'numero') celda.value = v === null || v === undefined || v === '' ? null : Number(v);
+      if (f._tipo === 'subtotal' && numerica(c) && !c.sinFormula && inicioGrupo && v !== undefined && v !== '') {
+        // El subtotal es una fórmula sobre los productos de su categoría
+        const letra = hoja.getColumn(i + 1).letter;
+        celda.value = { formula: `SUM(${letra}${inicioGrupo}:${letra}${fila - 1})`, result: Number(v) };
+      } else if (numerica(c) || c.tipo === 'porcentaje') celda.value = v === null || v === undefined || v === '' ? null : Number(v);
       else if (c.tipo === 'fecha') celda.value = v ? new Date(v) : null;
       else celda.value = v === null || v === undefined ? '' : String(v);
       if (c.tipo === 'dinero') celda.numFmt = '"$"#,##0.00';
+      if (c.tipo === 'porcentaje') celda.numFmt = '0.0"%"';
       if (c.tipo === 'fecha') celda.numFmt = 'dd/mm/yyyy hh:mm';
       if (c.tipo === 'texto' || !c.tipo) celda.alignment = { wrapText: true, vertical: 'top' };
+      if (f._tipo === 'subtotal') {
+        celda.font = { bold: true };
+        celda.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+        celda.border = { top: { style: 'thin', color: { argb: 'FFBBBBBB' } } };
+      }
     });
+    if (f._tipo === 'subtotal') { filasSubtotal.push(fila); inicioGrupo = null; }
   }
   if (r.filas.length) hoja.autoFilter = { from: { row: filaEnc, column: 1 }, to: { row: fila, column: n } };
 
@@ -80,11 +110,14 @@ async function excel(r) {
       const celda = hoja.getCell(fila, i + 1);
       const v = r.totales[c.clave];
       // Las sumas quedan como fórmula para que el archivo siga cuadrando si alguien edita una celda
+      const letra = hoja.getColumn(i + 1).letter;
       if (v === 'SUMA' && r.filas.length) {
-        const letra = hoja.getColumn(i + 1).letter;
         celda.value = { formula: `SUM(${letra}${filaEnc + 1}:${letra}${fila - 1})` };
-      } else celda.value = v ?? '';
+      } else if (v === 'SUBTOTALES' && filasSubtotal.length) {
+        celda.value = { formula: `SUM(${filasSubtotal.map((n) => letra + n).join(',')})` };
+      } else celda.value = v === 'SUBTOTALES' || v === 'SUMA' ? 0 : v ?? '';
       if (c.tipo === 'dinero') celda.numFmt = '"$"#,##0.00';
+      if (c.tipo === 'porcentaje') celda.numFmt = '0.0"%"';
       celda.font = { bold: true };
       celda.border = { top: { style: 'thin' } };
     });
@@ -103,8 +136,9 @@ async function excel(r) {
 // Valor que se imprime en el renglón de totales del PDF (las fórmulas se calculan aquí)
 function totalPdf(r, c) {
   const v = r.totales[c.clave];
-  if (v !== 'SUMA') return v ?? '';
-  return texto(r.filas.reduce((s, f) => s + Number(f[c.clave] || 0), 0), c.tipo);
+  if (v === 'SUMA') return texto(r.filas.filter((f) => !f._tipo).reduce((s, f) => s + Number(f[c.clave] || 0), 0), c.tipo);
+  if (v === 'SUBTOTALES') return texto(r.filas.filter((f) => f._tipo === 'subtotal').reduce((s, f) => s + Number(f[c.clave] || 0), 0), c.tipo);
+  return typeof v === 'number' ? texto(v, c.tipo) : v ?? '';
 }
 
 function pdf(r) {
@@ -151,10 +185,20 @@ function pdf(r) {
       let x = izq;
       doc.font('Helvetica-Bold').fontSize(9).fillColor('#fff');
       r.columnas.forEach((c, i) => {
-        const der = c.tipo === 'dinero' || c.tipo === 'numero';
+        const der = ['dinero', 'numero', 'porcentaje'].includes(c.tipo);
         doc.text(c.titulo, x + 4, y + 5, { width: anchos[i] - 8, align: der ? 'right' : 'left', lineBreak: false });
         x += anchos[i];
       });
+      doc.y = y + 18;
+    };
+
+    // Encabezado de categoría: una franja con el nombre a todo lo ancho
+    const franja = (textoFranja) => {
+      doc.font('Helvetica-Bold').fontSize(9);
+      if (doc.y + 18 > abajo()) { doc.addPage(); doc.y = doc.page.margins.top; encabezado(); }
+      const y = doc.y;
+      doc.rect(izq, y, anchoUtil, 18).fill('#DCE6F1');
+      doc.fillColor('#' + AZUL).font('Helvetica-Bold').fontSize(9).text(textoFranja, izq + 4, y + 5, { width: anchoUtil - 8, lineBreak: false });
       doc.y = y + 18;
     };
 
@@ -168,7 +212,7 @@ function pdf(r) {
       doc.fillColor('#000');
       valores.forEach((v, i) => {
         const c = r.columnas[i];
-        const der = c.tipo === 'dinero' || c.tipo === 'numero';
+        const der = ['dinero', 'numero', 'porcentaje'].includes(c.tipo);
         doc.text(v, x + 4, y + 4, { width: anchos[i] - 8, align: der ? 'right' : 'left' });
         x += anchos[i];
       });
@@ -178,7 +222,18 @@ function pdf(r) {
 
     encabezado();
     if (!r.filas.length) renglon(r.columnas.map((c, i) => (i === 0 ? 'Sin registros en el periodo' : '')));
-    r.filas.forEach((f, k) => renglon(r.columnas.map((c) => texto(f[c.clave], c.tipo)), { fondo: k % 2 ? '#F7F9FB' : null }));
+    let alterna = 0;
+    r.filas.forEach((f) => {
+      if (f._tipo === 'grupo') {
+        const nombre = f[r.columnas.find((c) => f[c.clave])?.clave] || '';
+        franja(nombre);
+        alterna = 0;
+      } else if (f._tipo === 'subtotal') {
+        renglon(r.columnas.map((c) => texto(f[c.clave], c.tipo)), { negrita: true, fondo: '#EEEEEE' });
+      } else {
+        renglon(r.columnas.map((c) => texto(f[c.clave], c.tipo)), { fondo: alterna++ % 2 ? '#F7F9FB' : null });
+      }
+    });
     if (r.totales) renglon(r.columnas.map((c) => String(totalPdf(r, c))), { negrita: true, fondo: '#E8EEF5' });
 
     if (r.nota) {
