@@ -103,8 +103,12 @@ router.get('/reportes/inventario/exportar', soloAdmin, m(reportes.exportarInvent
 router.get('/bitacora', soloAdmin, m(reportes.bitacora));
 router.get('/bitacora/exportar', soloAdmin, m(reportes.exportarBitacora));
 
-// ---------- Corte de caja (cada empleado cierra su turno) ----------
-router.get('/cortes/actual', todos, m(cortes.actual));
+// ---------- Caja: apertura, entradas/salidas de efectivo y corte (cada empleado maneja la suya) ----------
+router.get('/caja', todos, m(cortes.estado));
+router.post('/caja/abrir', todos, m(cortes.abrir));
+router.post('/caja/movimientos', todos, m(cortes.movimiento));
+router.get('/caja/abiertas', soloAdmin, m(cortes.abiertas));
+router.get('/cortes/actual', todos, m(cortes.estado));
 router.get('/cortes', todos, m(cortes.listar));
 router.get('/cortes/:id', todos, m(cortes.obtener));
 router.post('/cortes', todos, m(cortes.crear));

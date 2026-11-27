@@ -173,6 +173,7 @@ CREATE TABLE ventas (
   cambio               DECIMAL(10,2) NULL,
   tipo_entrega         ENUM('mostrador','recoger') NOT NULL DEFAULT 'mostrador',
   estado               ENUM('pagada','pendiente_entrega','entregada','cancelada') NOT NULL DEFAULT 'pagada',
+  id_turno             INT NULL,                    -- caja (turno) en la que se cobró
   UNIQUE KEY uq_venta_folio (id_papeleria, folio),
   CONSTRAINT fk_venta_pap FOREIGN KEY (id_papeleria) REFERENCES papelerias(id_papeleria),
   CONSTRAINT fk_venta_cliente FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente),
@@ -266,12 +267,42 @@ CREATE TABLE movimientos_inventario (
   CONSTRAINT fk_mov_usuario FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
 ) /*T![auto_id_cache] AUTO_ID_CACHE=1 */;
 
+-- ---------- TURNOS DE CAJA (apertura: el empleado cuenta el fondo con el que empieza) ----------
+-- Sin caja abierta no se pueden registrar ventas. Cada empleado tiene a lo más una caja abierta.
+CREATE TABLE turnos_caja (
+  id_turno          INT AUTO_INCREMENT PRIMARY KEY,
+  id_papeleria      INT NOT NULL,
+  id_usuario        INT NOT NULL,                 -- empleado dueño de la caja
+  abierto_en        DATETIME NOT NULL,
+  fondo_inicial     DECIMAL(10,2) NOT NULL CHECK (fondo_inicial >= 0),  -- efectivo contado al abrir
+  desglose_apertura VARCHAR(500),                 -- billetes y monedas contados (JSON)
+  estado            ENUM('abierto','cerrado') NOT NULL DEFAULT 'abierto',
+  cerrado_en        DATETIME NULL,
+  CONSTRAINT fk_turno_pap FOREIGN KEY (id_papeleria) REFERENCES papelerias(id_papeleria),
+  CONSTRAINT fk_turno_usuario FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
+) /*T![auto_id_cache] AUTO_ID_CACHE=1 */;
+
+-- ---------- MOVIMIENTOS DE CAJA (entradas y salidas de efectivo que no son ventas) ----------
+CREATE TABLE movimientos_caja (
+  id_movimiento  INT AUTO_INCREMENT PRIMARY KEY,
+  id_turno       INT NOT NULL,
+  id_papeleria   INT NOT NULL,
+  id_usuario     INT NOT NULL,
+  tipo           ENUM('entrada','salida') NOT NULL,   -- ej. entrada: traen cambio; salida: pago de garrafón, retiro
+  monto          DECIMAL(10,2) NOT NULL CHECK (monto > 0),
+  motivo         VARCHAR(150) NOT NULL,
+  fecha          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_movcaja_turno FOREIGN KEY (id_turno) REFERENCES turnos_caja(id_turno),
+  CONSTRAINT fk_movcaja_usuario FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
+) /*T![auto_id_cache] AUTO_ID_CACHE=1 */;
+
 -- ---------- CORTES DE CAJA (cierre del turno de cada empleado) ----------
 CREATE TABLE cortes_caja (
   id_corte              INT AUTO_INCREMENT PRIMARY KEY,
   id_papeleria          INT NOT NULL,
   folio                 INT NOT NULL,
   id_usuario            INT NOT NULL,              -- empleado que cierra su turno
+  id_turno              INT NULL UNIQUE,           -- caja que se cierra
   desde                 DATETIME NOT NULL,
   hasta                 DATETIME NOT NULL,
   num_ventas            INT NOT NULL DEFAULT 0,
@@ -279,10 +310,13 @@ CREATE TABLE cortes_caja (
   ventas_tarjeta        DECIMAL(10,2) NOT NULL DEFAULT 0,
   ventas_transferencia  DECIMAL(10,2) NOT NULL DEFAULT 0,
   canceladas            INT NOT NULL DEFAULT 0,
-  fondo_inicial         DECIMAL(10,2) NOT NULL DEFAULT 0,
-  efectivo_esperado     DECIMAL(10,2) NOT NULL,    -- fondo + ventas en efectivo
+  fondo_inicial         DECIMAL(10,2) NOT NULL DEFAULT 0,   -- el que se contó al abrir la caja
+  entradas              DECIMAL(10,2) NOT NULL DEFAULT 0,   -- entradas de efectivo del turno
+  salidas               DECIMAL(10,2) NOT NULL DEFAULT 0,   -- salidas de efectivo del turno
+  efectivo_esperado     DECIMAL(10,2) NOT NULL,    -- fondo + ventas en efectivo + entradas - salidas
   efectivo_contado      DECIMAL(10,2) NOT NULL,
   diferencia            DECIMAL(10,2) NOT NULL,    -- contado - esperado (negativo = falta)
+  desglose              VARCHAR(500),              -- billetes y monedas contados (JSON)
   notas                 VARCHAR(255),
   UNIQUE KEY uq_corte_folio (id_papeleria, folio),
   CONSTRAINT fk_corte_pap FOREIGN KEY (id_papeleria) REFERENCES papelerias(id_papeleria),
@@ -317,3 +351,5 @@ CREATE INDEX idx_cli_nombre  ON clientes(id_papeleria, nombre);
 CREATE INDEX idx_venta_fecha ON ventas(id_papeleria, fecha);
 CREATE INDEX idx_cot_fecha   ON cotizaciones(id_papeleria, fecha);
 CREATE INDEX idx_compra_fecha ON compras(id_papeleria, fecha);
+CREATE INDEX idx_turno_usuario ON turnos_caja(id_papeleria, id_usuario, estado);
+CREATE INDEX idx_venta_turno ON ventas(id_turno);

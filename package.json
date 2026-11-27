@@ -11,7 +11,8 @@
     "build": "node scripts/copiar-vendor.js",
     "cargar-bd": "node scripts/cargar-bd.js",
     "migrar": "node scripts/migrar.js",
-    "subir-csd": "node scripts/subir-csd.js"
+    "subir-csd": "node scripts/subir-csd.js",
+    "simular": "node scripts/simular-uso.js"
   },
   "license": "MIT",
   "dependencies": {

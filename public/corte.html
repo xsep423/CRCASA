@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CRCASA | Corte de caja</title>
+  <title>CRCASA | Mi caja</title>
   <link href="/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
   <link href="/vendor/icons/bootstrap-icons.min.css" rel="stylesheet">
   <link href="/css/estilos.css" rel="stylesheet">
@@ -11,46 +11,103 @@
 <body>
   <div id="nav"></div>
   <main class="container py-4">
-    <h1 class="h4 mb-1">Corte de caja</h1>
-    <p class="text-muted no-print">Al cerrar tu turno, cuenta el efectivo de la caja. El sistema lo compara con lo que debería haber:
-      el fondo con el que empezaste más tus ventas en efectivo.</p>
+    <h1 class="h4 mb-1">Mi caja</h1>
+    <ol class="pasos-caja no-print">
+      <li id="paso-1"><strong>Abre</strong> tu caja contando el fondo con el que empiezas</li>
+      <li id="paso-2"><strong>Vende</strong> y anota aquí el efectivo que entre o salga sin ser venta</li>
+      <li id="paso-3"><strong>Cierra</strong> con el corte: cuenta el efectivo y el sistema te dice si cuadra</li>
+    </ol>
 
-    <div class="row g-3">
-      <div class="col-lg-7">
-        <div class="card"><div class="card-body" id="turno">
-          <div class="d-flex justify-content-between align-items-start mb-2">
-            <h2 class="h6 text-muted mb-0">Tu turno actual</h2><small class="text-muted" id="t-periodo"></small>
-          </div>
-          <div class="row text-center g-2 mb-1">
-            <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">Ventas</div><div class="fs-4 fw-bold" id="t-ventas">0</div></div></div>
-            <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">Efectivo</div><div class="fs-5 fw-bold money text-center" id="t-efectivo">$0</div></div></div>
-            <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">Tarjeta</div><div class="fs-5 fw-bold money text-center" id="t-tarjeta">$0</div></div></div>
-            <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">Transferencia</div><div class="fs-5 fw-bold money text-center" id="t-transferencia">$0</div></div></div>
-          </div>
-          <p class="small text-muted mb-0" id="t-canceladas"></p>
-        </div></div>
-      </div>
+    <!-- Caja cerrada -->
+    <div id="vista-cerrada" class="d-none">
+      <div class="card"><div class="card-body text-center py-5">
+        <i class="bi bi-lock text-warning" style="font-size:3rem"></i>
+        <h2 class="h5 mt-2">Tu caja está cerrada</h2>
+        <p class="text-muted mb-3" id="info-cerrada">Para registrar ventas, primero ábrela contando el efectivo con el que empiezas.</p>
+        <button class="btn btn-success btn-lg" id="btn-abrir"><i class="bi bi-unlock"></i> Abrir mi caja</button>
+      </div></div>
+    </div>
 
-      <div class="col-lg-5">
-        <form class="card no-print" id="form-corte"><div class="card-body">
-          <h2 class="h6 text-muted mb-3">Cerrar turno</h2>
-          <div class="mb-2"><label class="form-label">Fondo inicial (con cuánto abriste la caja)</label>
-            <input name="fondo_inicial" type="number" min="0" step="0.01" class="form-control text-end" value="0"></div>
-          <div class="mb-2"><label class="form-label">Efectivo contado en caja *</label>
-            <input name="efectivo_contado" type="number" min="0" step="0.01" class="form-control text-end" required></div>
-          <div class="d-flex justify-content-between"><span>Efectivo esperado</span><strong class="money" id="esperado">$0.00</strong></div>
-          <div class="d-flex justify-content-between mb-2"><span>Diferencia</span><strong class="money" id="diferencia">—</strong></div>
-          <div class="mb-3"><label class="form-label">Notas</label><input name="notas" class="form-control" maxlength="255" placeholder="Ej. se pagó un garrafón de agua con caja"></div>
-          <button class="btn btn-primary w-100"><i class="bi bi-lock"></i> Registrar corte</button>
-        </div></form>
+    <!-- Caja abierta -->
+    <div id="vista-abierta" class="d-none">
+      <div id="aviso-otro-dia" class="alert alert-warning d-none"><i class="bi bi-exclamation-triangle"></i>
+        Esta caja se abrió en otro día. Haz el corte ahora para que las cuentas de cada día queden separadas.</div>
+      <div class="row g-3">
+        <div class="col-lg-7">
+          <div class="card mb-3"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <h2 class="h6 text-muted mb-0"><i class="bi bi-unlock text-success"></i> Caja abierta</h2><small class="text-muted" id="t-periodo"></small>
+            </div>
+            <div class="row text-center g-2 mb-2">
+              <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">Ventas</div><div class="fs-4 fw-bold" id="t-ventas">0</div></div></div>
+              <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">Efectivo</div><div class="fs-5 fw-bold" id="t-efectivo">$0</div></div></div>
+              <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">Tarjeta</div><div class="fs-5 fw-bold" id="t-tarjeta">$0</div></div></div>
+              <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="small text-muted">Transferencia</div><div class="fs-5 fw-bold" id="t-transferencia">$0</div></div></div>
+            </div>
+            <table class="table table-sm mb-0 cuenta-caja">
+              <tr><td>Fondo con el que abriste</td><td class="money" id="c-fondo"></td></tr>
+              <tr><td>+ Ventas en efectivo</td><td class="money" id="c-ventas"></td></tr>
+              <tr><td>+ Entradas de efectivo</td><td class="money" id="c-entradas"></td></tr>
+              <tr><td>− Salidas de efectivo</td><td class="money text-danger" id="c-salidas"></td></tr>
+              <tr class="fw-bold fs-5"><td>= Debería haber en caja</td><td class="money" id="c-esperado"></td></tr>
+            </table>
+            <p class="small text-muted mb-0 mt-1" id="t-canceladas"></p>
+          </div></div>
+
+          <div class="card"><div class="card-body">
+            <h2 class="h6 text-muted">Entradas y salidas de efectivo</h2>
+            <p class="small text-muted">Lo que entra o sale de la caja <strong>sin ser una venta</strong>: te traen monedas de cambio, pagas un garrafón, el encargado retira efectivo…</p>
+            <form class="row g-2 align-items-end mb-3" id="form-mov">
+              <div class="col-sm-3"><div class="btn-group w-100" role="group">
+                <input type="radio" class="btn-check" name="tipo" id="tipo-salida" value="salida" checked>
+                <label class="btn btn-outline-danger" for="tipo-salida"><i class="bi bi-dash-lg"></i> Sale</label>
+                <input type="radio" class="btn-check" name="tipo" id="tipo-entrada" value="entrada">
+                <label class="btn btn-outline-success" for="tipo-entrada"><i class="bi bi-plus-lg"></i> Entra</label>
+              </div></div>
+              <div class="col-sm-3"><input name="monto" type="number" min="0.5" step="0.5" class="form-control text-end" placeholder="Monto" required></div>
+              <div class="col-sm-4"><input name="motivo" class="form-control" placeholder="Motivo (ej. pago de garrafón)" required minlength="3" maxlength="150" list="motivos"></div>
+              <div class="col-sm-2"><button class="btn btn-primary w-100">Anotar</button></div>
+              <datalist id="motivos">
+                <option value="Retiro de efectivo por el encargado"><option value="Pago de garrafón de agua"><option value="Compra de artículos de limpieza">
+                <option value="Pago a mensajería"><option value="Monedas de cambio del banco"><option value="Reposición de fondo">
+              </datalist>
+            </form>
+            <table class="table table-sm mb-0"><tbody id="movimientos"></tbody></table>
+          </div></div>
+        </div>
+
+        <div class="col-lg-5">
+          <form class="card no-print" id="form-corte" novalidate><div class="card-body">
+            <h2 class="h6 text-muted mb-2"><i class="bi bi-lock"></i> Cerrar mi caja (corte)</h2>
+            <p class="small text-muted">Cuenta todo el efectivo que hay en la caja ahora.</p>
+            <label class="form-label fw-semibold">Efectivo contado *</label>
+            <div id="contador-corte"></div>
+            <div class="d-flex justify-content-between mt-2"><span>Debería haber</span><strong class="money" id="esperado">$0.00</strong></div>
+            <div class="d-flex justify-content-between mb-2 fs-5"><span>Diferencia</span><strong class="money" id="diferencia">—</strong></div>
+            <div class="mb-3"><label class="form-label">Notas</label><input name="notas" class="form-control" maxlength="255" placeholder="Explica si sobra o falta dinero"></div>
+            <button class="btn btn-primary w-100 btn-lg"><i class="bi bi-lock"></i> Registrar corte y cerrar caja</button>
+          </div></form>
+        </div>
       </div>
+    </div>
+
+    <!-- Administrador: cajas abiertas en la papelería -->
+    <div id="vista-admin" class="d-none">
+      <h2 class="h5 mt-4">Cajas abiertas ahora</h2>
+      <div class="card"><div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light"><tr><th>Empleado</th><th>Abierta desde</th><th class="text-end">Ventas</th><th class="money">Fondo</th>
+            <th class="money">Ventas efectivo</th><th class="money">Entradas</th><th class="money">Salidas</th><th class="money">Debería haber</th></tr></thead>
+          <tbody id="abiertas"></tbody>
+        </table>
+      </div></div>
     </div>
 
     <h2 class="h5 mt-4" id="titulo-historial">Cortes anteriores</h2>
     <div class="card"><div class="table-responsive">
       <table class="table table-hover mb-0">
-        <thead class="table-light"><tr><th>Folio</th><th>Empleado</th><th>Turno</th><th class="text-end">Ventas</th><th class="money">Efectivo</th>
-          <th class="money">Tarjeta</th><th class="money">Transf.</th><th class="money">Esperado</th><th class="money">Contado</th><th class="money">Diferencia</th><th></th></tr></thead>
+        <thead class="table-light"><tr><th>Folio</th><th>Empleado</th><th>Turno</th><th class="text-end">Ventas</th><th class="money">Fondo</th><th class="money">Efectivo</th>
+          <th class="money">Tarjeta</th><th class="money">Transf.</th><th class="money">Ent./Sal.</th><th class="money">Esperado</th><th class="money">Contado</th><th class="money">Diferencia</th><th></th></tr></thead>
         <tbody id="historial"></tbody>
       </table>
     </div></div>
@@ -70,40 +127,93 @@
     const $ = (id) => document.getElementById(id);
     const form = $('form-corte');
     const modal = new bootstrap.Modal($('modal-corte'));
-    let turno = null, cortes = [];
+    let caja = null, cortes = [];
+    const contador = contadorEfectivo($('contador-corte'), { nombre: 'efectivo_contado', alCambiar: calcular });
 
     const signo = (n) => (n > 0 ? `<span class="text-success">+${dinero(n)} sobra</span>` : n < 0 ? `<span class="text-danger">${dinero(n)} falta</span>` : '<span class="text-success">Cuadra exacto</span>');
+    const DEN = (d) => (Number(d) === 0.5 ? '50¢' : `$${d}`);
 
     function calcular() {
-      if (!turno) return;
-      const esperado = Number(form.fondo_inicial.value || 0) + turno.ventas_efectivo;
-      $('esperado').textContent = dinero(esperado);
-      $('diferencia').innerHTML = form.efectivo_contado.value === '' ? '—' : signo(Math.round((Number(form.efectivo_contado.value) - esperado) * 100) / 100);
+      if (!caja?.abierta) return;
+      $('esperado').textContent = dinero(caja.efectivo_esperado);
+      const t = contador.total();
+      $('diferencia').innerHTML = t === null ? '—' : signo(Math.round((t - caja.efectivo_esperado) * 100) / 100);
     }
 
-    async function cargarTurno() {
-      turno = await API.get('/cortes/actual');
-      $('t-periodo').textContent = `Desde ${fecha(turno.desde)}`;
-      $('t-ventas').textContent = turno.num_ventas;
-      $('t-efectivo').textContent = dinero(turno.ventas_efectivo);
-      $('t-tarjeta').textContent = dinero(turno.ventas_tarjeta);
-      $('t-transferencia').textContent = dinero(turno.ventas_transferencia);
-      $('t-canceladas').textContent = turno.canceladas ? `${turno.canceladas} venta(s) cancelada(s) en el turno, no se cuentan.` : '';
-      calcular();
+    function pintarPasos() {
+      ['paso-1', 'paso-2', 'paso-3'].forEach((id) => $(id).classList.remove('actual', 'hecho'));
+      if (!caja.abierta) $('paso-1').classList.add('actual');
+      else { $('paso-1').classList.add('hecho'); $('paso-2').classList.add('actual'); }
     }
+
+    // El menú pide el estado de la caja; esta pantalla se pinta con ese mismo dato
+    document.addEventListener('caja', (e) => {
+      caja = e.detail;
+      pintarPasos();
+      $('vista-cerrada').classList.toggle('d-none', caja.abierta);
+      $('vista-abierta').classList.toggle('d-none', !caja.abierta);
+      if (!caja.abierta) {
+        $('info-cerrada').innerHTML = `Para registrar ventas, primero ábrela contando el efectivo con el que empiezas.${caja.ultimo_corte
+          ? `<br>Tu último corte fue el ${fecha(caja.ultimo_corte.hasta)} con ${dinero(caja.ultimo_corte.efectivo_contado)} contados.` : ''}`;
+        cajasAbiertas().catch(() => {});
+        return;
+      }
+      cajasAbiertas().catch(() => {});
+      $('aviso-otro-dia').classList.toggle('d-none', !caja.de_otro_dia);
+      $('t-periodo').textContent = `Desde ${fecha(caja.abierto_en)}`;
+      $('t-ventas').textContent = caja.num_ventas;
+      $('t-efectivo').textContent = dinero(caja.ventas_efectivo);
+      $('t-tarjeta').textContent = dinero(caja.ventas_tarjeta);
+      $('t-transferencia').textContent = dinero(caja.ventas_transferencia);
+      $('c-fondo').textContent = dinero(caja.fondo_inicial);
+      $('c-ventas').textContent = dinero(caja.ventas_efectivo);
+      $('c-entradas').textContent = dinero(caja.entradas);
+      $('c-salidas').textContent = dinero(caja.salidas);
+      $('c-esperado').textContent = dinero(caja.efectivo_esperado);
+      $('t-canceladas').textContent = caja.canceladas ? `${caja.canceladas} venta(s) cancelada(s) en esta caja; no se cuentan.` : '';
+      $('movimientos').innerHTML = caja.movimientos.map((m) => `<tr>
+        <td class="small text-muted text-nowrap">${fecha(m.fecha)}</td>
+        <td><span class="badge text-bg-${m.tipo === 'entrada' ? 'success' : 'danger'}">${m.tipo === 'entrada' ? 'Entra' : 'Sale'}</span> ${esc(m.motivo)}</td>
+        <td class="money ${m.tipo === 'salida' ? 'text-danger' : ''}">${m.tipo === 'salida' ? '−' : '+'}${dinero(m.monto)}</td></tr>`).join('')
+        || '<tr><td class="text-muted small">Sin entradas ni salidas en esta caja</td></tr>';
+      calcular();
+    });
+
+    $('btn-abrir').addEventListener('click', () => abrirCaja());
+
+    $('form-mov').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      if (!f.checkValidity()) { f.reportValidity(); return; }
+      try {
+        const r = await API.post('/caja/movimientos', Object.fromEntries(new FormData(f)));
+        avisar(r.mensaje);
+        f.monto.value = ''; f.motivo.value = '';
+        refrescarCaja();
+      } catch (err) { avisarError(err); }
+    });
 
     function comprobante(c) {
+      const fila = (a, b, cls = '') => `<div class="d-flex justify-content-between ${cls}"><span>${a}</span><span class="money">${b}</span></div>`;
+      let desglose = '';
+      try {
+        const d = c.desglose ? JSON.parse(c.desglose) : null;
+        if (d) desglose = `<p class="small mb-1 mt-2"><strong>Conteo:</strong> ${Object.entries(d).sort((a, b) => b[0] - a[0]).map(([den, n]) => `${n} × ${DEN(den)}`).join(' · ')}</p>`;
+      } catch { /* desglose ilegible: se omite */ }
       $('comprobante').innerHTML = `
         <h2 class="h5 mb-0" style="color:var(--crcasa)">${esc(yo.papeleria || '')}</h2>
         <div class="d-flex justify-content-between border-bottom pb-2 mb-2"><span>Corte de caja <strong>folio ${c.folio}</strong></span><small>${fecha(c.hasta)}</small></div>
-        <p class="mb-2"><strong>Empleado:</strong> ${esc(c.empleado)}<br><strong>Turno:</strong> ${fecha(c.desde)} a ${fecha(c.hasta)}</p>
-        ${[['Ventas registradas', c.num_ventas], ['Ventas canceladas', c.canceladas]].map(([a, b]) => `<div class="d-flex justify-content-between"><span>${a}</span><span>${b}</span></div>`).join('')}
+        <p class="mb-2"><strong>Empleado:</strong> ${esc(c.empleado)}<br><strong>Caja abierta:</strong> ${fecha(c.desde)} a ${fecha(c.hasta)}</p>
+        ${fila('Ventas registradas', c.num_ventas)}${fila('Ventas canceladas', c.canceladas)}
         <hr class="my-2">
-        ${[['Efectivo', c.ventas_efectivo], ['Tarjeta', c.ventas_tarjeta], ['Transferencia', c.ventas_transferencia]].map(([a, b]) => `<div class="d-flex justify-content-between"><span>Ventas con ${a.toLowerCase()}</span><span class="money">${dinero(b)}</span></div>`).join('')}
+        ${fila('Ventas con efectivo', dinero(c.ventas_efectivo))}${fila('Ventas con tarjeta', dinero(c.ventas_tarjeta))}${fila('Ventas con transferencia', dinero(c.ventas_transferencia))}
         <hr class="my-2">
-        <div class="d-flex justify-content-between"><span>Fondo inicial</span><span class="money">${dinero(c.fondo_inicial)}</span></div>
-        <div class="d-flex justify-content-between"><span>Efectivo esperado</span><span class="money">${dinero(c.efectivo_esperado)}</span></div>
-        <div class="d-flex justify-content-between"><span>Efectivo contado</span><span class="money">${dinero(c.efectivo_contado)}</span></div>
+        ${fila('Fondo de apertura', dinero(c.fondo_inicial))}${fila('+ Ventas en efectivo', dinero(c.ventas_efectivo))}
+        ${fila('+ Entradas de efectivo', dinero(c.entradas))}${fila('− Salidas de efectivo', dinero(c.salidas))}
+        ${(c.movimientos || []).map((m) => fila(`<small class="text-muted ps-3">${m.tipo === 'entrada' ? '+' : '−'} ${esc(m.motivo)}</small>`, `<small class="text-muted">${dinero(m.monto)}</small>`)).join('')}
+        ${fila('<strong>Efectivo esperado</strong>', `<strong>${dinero(c.efectivo_esperado)}</strong>`, 'border-top mt-1 pt-1')}
+        ${fila('Efectivo contado', dinero(c.efectivo_contado))}
+        ${desglose}
         <div class="d-flex justify-content-between fw-bold fs-5 border-top mt-1 pt-1"><span>Diferencia</span><span class="money">${signo(Number(c.diferencia))}</span></div>
         ${c.notas ? `<p class="small mt-2 mb-0"><strong>Notas:</strong> ${esc(c.notas)}</p>` : ''}
         <p class="small text-muted mt-4 mb-0">Firma del empleado: ______________________ &nbsp; Recibió: ______________________</p>`;
@@ -115,31 +225,47 @@
       $('titulo-historial').textContent = ES_ADMIN() ? 'Cortes de la papelería' : 'Mis cortes anteriores';
       $('historial').innerHTML = cortes.map((c, i) => `<tr><td><strong>${c.folio}</strong></td><td>${esc(c.empleado)}</td>
         <td class="small">${fecha(c.desde)}<br>${fecha(c.hasta)}</td><td class="text-end">${c.num_ventas}</td>
+        <td class="money">${dinero(c.fondo_inicial)}</td>
         <td class="money">${dinero(c.ventas_efectivo)}</td><td class="money">${dinero(c.ventas_tarjeta)}</td><td class="money">${dinero(c.ventas_transferencia)}</td>
+        <td class="money small">${Number(c.entradas) ? `+${dinero(c.entradas)}` : ''}${Number(c.salidas) ? `<br><span class="text-danger">−${dinero(c.salidas)}</span>` : ''}</td>
         <td class="money">${dinero(c.efectivo_esperado)}</td><td class="money">${dinero(c.efectivo_contado)}</td>
         <td class="money fw-bold ${Number(c.diferencia) < 0 ? 'text-danger' : 'text-success'}">${dinero(c.diferencia)}</td>
-        <td><button class="btn btn-sm btn-outline-secondary" data-ver="${i}" title="Ver / imprimir"><i class="bi bi-printer"></i></button></td></tr>`).join('')
-        || '<tr><td colspan="11" class="text-center text-muted py-3">Sin cortes registrados</td></tr>';
+        <td><button class="btn btn-sm btn-outline-secondary" data-ver="${c.id_corte}" title="Ver / imprimir"><i class="bi bi-printer"></i></button></td></tr>`).join('')
+        || '<tr><td colspan="13" class="text-center text-muted py-3">Sin cortes registrados</td></tr>';
     }
 
-    form.addEventListener('input', calcular);
+    async function cajasAbiertas() {
+      if (!ES_ADMIN()) return;
+      $('vista-admin').classList.remove('d-none');
+      const lista = await API.get('/caja/abiertas');
+      $('abiertas').innerHTML = lista.map((c) => `<tr class="${c.de_otro_dia ? 'table-warning' : ''}">
+        <td>${esc(c.empleado)}${c.de_otro_dia ? ' <span class="badge text-bg-warning">de otro día</span>' : ''}</td>
+        <td class="small">${fecha(c.abierto_en)}</td><td class="text-end">${c.num_ventas}</td>
+        <td class="money">${dinero(c.fondo_inicial)}</td><td class="money">${dinero(c.ventas_efectivo)}</td>
+        <td class="money">${dinero(c.entradas)}</td><td class="money text-danger">${dinero(c.salidas)}</td>
+        <td class="money fw-bold">${dinero(c.efectivo_esperado)}</td></tr>`).join('')
+        || '<tr><td colspan="8" class="text-center text-muted py-3">Ninguna caja abierta</td></tr>';
+    }
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (!confirm('¿Registrar el corte? Tu turno se cierra y el siguiente empieza en cero.')) return;
+      if (contador.total() === null) { contador.input.focus(); return avisar('Escribe cuánto efectivo contaste', 'warning'); }
+      const dif = Math.round((contador.total() - caja.efectivo_esperado) * 100) / 100;
+      if (!confirm(`¿Registrar el corte y cerrar tu caja?\n\nContado: ${dinero(contador.total())}\nDebería haber: ${dinero(caja.efectivo_esperado)}\n${dif === 0 ? 'Cuadra exacto' : dif > 0 ? `Sobran ${dinero(dif)}` : `Faltan ${dinero(-dif)}`}`)) return;
       try {
-        const r = await API.post('/cortes', Object.fromEntries(new FormData(form)));
+        const r = await API.post('/cortes', { efectivo_contado: contador.total(), desglose: contador.desglose(), notas: form.notas.value });
         avisar(r.mensaje);
-        form.efectivo_contado.value = ''; form.notas.value = '';
+        contador.poner(''); form.notas.value = '';
         comprobante(r.corte);
-        cargarTurno(); historial();
+        refrescarCaja(); historial();
       } catch (err) { avisarError(err); }
     });
-    $('historial').addEventListener('click', (e) => {
+    $('historial').addEventListener('click', async (e) => {
       const b = e.target.closest('[data-ver]');
-      if (b) comprobante(cortes[b.dataset.ver]);
+      if (b) { try { comprobante(await API.get(`/cortes/${b.dataset.ver}`)); } catch (err) { avisarError(err); } }
     });
 
-    Promise.all([cargarTurno(), historial()]).catch(avisarError);
+    historial().catch(avisarError);
   </script>
 </body>
 </html>

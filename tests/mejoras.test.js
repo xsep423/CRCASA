@@ -45,6 +45,25 @@ test.before(async () => {
 });
 test.after(async () => { server.close(); await pool.end(); });
 
+test('apertura de caja: sin caja abierta no se vende; se abre contando el fondo', async () => {
+  const cerrada = await api('caj', 'POST', '/ventas', { id_cliente: pg, partidas: [{ id_producto: prod, cantidad: 1 }] });
+  assert.equal(cerrada.status, 409);
+  assert.equal(cerrada.data.caja_cerrada, true);
+  const e = (await api('caj', 'GET', '/caja')).data;
+  assert.equal(e.abierta, false);
+  assert.equal(e.fondo_sugerido, 500);
+  assert.equal((await api('caj', 'POST', '/caja/abrir', {})).status, 400);
+  // el desglose de billetes y monedas debe sumar el fondo
+  assert.equal((await api('caj', 'POST', '/caja/abrir', { fondo_inicial: 500, desglose: { 200: 2 } })).status, 400);
+  const r = await api('caj', 'POST', '/caja/abrir', { fondo_inicial: 500, desglose: { 200: 2, 50: 1, 20: 2, 10: 1 } });
+  assert.equal(r.status, 201);
+  assert.equal(r.data.caja.fondo_inicial, 500);
+  assert.equal((await api('caj', 'POST', '/caja/abrir', { fondo_inicial: 100 })).status, 409); // solo una caja abierta
+  const abiertas = (await api('adm', 'GET', '/caja/abiertas')).data;
+  assert.equal(abiertas.length, 1);
+  assert.equal((await api('caj', 'GET', '/caja/abiertas')).status, 403);
+});
+
 test('folios consecutivos propios de cada papelería', async () => {
   const v1 = (await api('caj', 'POST', '/ventas', { id_cliente: pg, partidas: [{ id_producto: prod, cantidad: 1 }] })).data.venta;
   const v2 = (await api('caj', 'POST', '/ventas', { id_cliente: pg, partidas: [{ id_producto: prod, cantidad: 1 }], metodo_pago: 'tarjeta' })).data.venta;
@@ -85,20 +104,39 @@ test('kárdex: cada movimiento queda registrado con la existencia resultante', a
   assert.equal((await api('sop', 'POST', '/auth/papeleria', { id_papeleria: 1 })).status, 200);
 });
 
-test('corte de caja: compara el efectivo contado contra lo esperado', async () => {
-  const t = (await api('caj', 'GET', '/cortes/actual')).data;
+test('corte de caja: fondo de la apertura + ventas en efectivo + entradas - salidas', async () => {
+  const t = (await api('caj', 'GET', '/caja')).data;
+  assert.equal(t.abierta, true);
   assert.equal(t.num_ventas, 3);       // folios 1, 3 y 4 (la 2 se canceló)
   assert.equal(t.canceladas, 1);
   assert.equal(t.ventas_efectivo, 200); // 50 + 100 (cotización convertida, 2 piezas) + 50
-  const r = await api('caj', 'POST', '/cortes', { fondo_inicial: 500, efectivo_contado: 690 });
+  assert.equal(t.efectivo_esperado, 700);
+  // entradas y salidas de efectivo que no son ventas
+  assert.equal((await api('caj', 'POST', '/caja/movimientos', { tipo: 'salida', monto: 5000, motivo: 'Retiro' })).status, 400); // no alcanza
+  assert.equal((await api('caj', 'POST', '/caja/movimientos', { tipo: 'salida', monto: 30 })).status, 400);                   // sin motivo
+  assert.equal((await api('caj', 'POST', '/caja/movimientos', { tipo: 'entrada', monto: 50, motivo: 'Traen monedas de cambio' })).status, 201);
+  const sal = await api('caj', 'POST', '/caja/movimientos', { tipo: 'salida', monto: 30, motivo: 'Garrafón de agua' });
+  assert.equal(sal.data.caja.efectivo_esperado, 720);
+  // el contado debe coincidir con su desglose
+  assert.equal((await api('caj', 'POST', '/cortes', { efectivo_contado: 710, desglose: { 500: 1 } })).status, 400);
+  const r = await api('caj', 'POST', '/cortes', { efectivo_contado: 710, desglose: { 500: 1, 200: 1, 10: 1 }, fondo_inicial: 9999 });
   assert.equal(r.status, 201);
-  assert.equal(Number(r.data.corte.efectivo_esperado), 700);
+  assert.equal(Number(r.data.corte.fondo_inicial), 500); // el fondo sale de la apertura, no se puede cambiar al cerrar
+  assert.equal(Number(r.data.corte.entradas), 50);
+  assert.equal(Number(r.data.corte.salidas), 30);
+  assert.equal(Number(r.data.corte.efectivo_esperado), 720);
   assert.equal(Number(r.data.corte.diferencia), -10);
   assert.equal(r.data.corte.folio, 1);
-  // el turno siguiente empieza en cero
-  assert.equal((await api('caj', 'GET', '/cortes/actual')).data.num_ventas, 0);
-  assert.equal((await api('caj', 'POST', '/cortes', { fondo_inicial: 0 })).status, 400);
+  assert.equal(r.data.corte.movimientos.length, 2);
+  // la caja queda cerrada: ya no se vende ni se puede volver a cortar hasta abrir otra
+  assert.equal((await api('caj', 'GET', '/caja')).data.abierta, false);
+  assert.equal((await api('caj', 'POST', '/cortes', { efectivo_contado: 0 })).status, 409);
+  assert.equal((await api('caj', 'POST', '/ventas', { id_cliente: pg, partidas: [{ id_producto: prod, cantidad: 1 }] })).status, 409);
   assert.equal((await api('adm', 'GET', '/cortes')).data.length, 1);
+  // la caja siguiente empieza en cero
+  const nueva = (await api('caj', 'POST', '/caja/abrir', { fondo_inicial: 710 })).data.caja;
+  assert.equal(nueva.num_ventas, 0);
+  assert.equal(nueva.efectivo_esperado, 710);
 });
 
 test('reportes de ventas por rango y agrupación', async () => {
@@ -139,6 +177,6 @@ test('cada empleado cambia su propia contraseña', async () => {
 test('la bitácora registra las acciones importantes', async () => {
   const b = (await api('adm', 'GET', '/bitacora?desde=2026-01-01&hasta=2099-12-31')).data;
   const acciones = b.map((x) => x.accion);
-  for (const a of ['Cancelar venta', 'Registrar compra', 'Corte de caja', 'Cambiar contraseña']) assert.ok(acciones.includes(a), a);
+  for (const a of ['Cancelar venta', 'Registrar compra', 'Abrir caja', 'Salida de efectivo', 'Corte de caja', 'Cambiar contraseña']) assert.ok(acciones.includes(a), a);
   assert.equal((await api('caj', 'GET', '/bitacora')).status, 403);
 });

@@ -22,6 +22,20 @@ body { background: #f5f7fa; }
 .catalogo thead th { z-index: 1; }
 .lista-clientes { max-height: 60vh; overflow-y: auto; }
 
+/* Caja: pasos y contador de efectivo */
+.pasos-caja { display: flex; flex-wrap: wrap; gap: .5rem; list-style: none; padding: 0; margin: .5rem 0 1rem; counter-reset: paso; }
+.pasos-caja li { flex: 1 1 220px; background: #fff; border-radius: .5rem; padding: .5rem .75rem .5rem 2.4rem; position: relative;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08); color: #6c757d; font-size: .9rem; counter-increment: paso; }
+.pasos-caja li::before { content: counter(paso); position: absolute; left: .6rem; top: 50%; transform: translateY(-50%);
+  width: 1.4rem; height: 1.4rem; border-radius: 50%; background: #dee2e6; color: #495057; text-align: center; font-weight: 700; line-height: 1.4rem; font-size: .8rem; }
+.pasos-caja li.actual { color: #212529; outline: 2px solid var(--crcasa); }
+.pasos-caja li.actual::before { background: var(--crcasa); color: #fff; }
+.pasos-caja li.hecho::before { content: '✓'; background: #198754; color: #fff; }
+.denom { min-width: 3.6rem; justify-content: center; font-weight: 600; }
+.denom.billete { background: #e8f3ec; color: #146c43; }
+.denom.moneda { background: #fff3cd; color: #997404; }
+.cuenta-caja td { padding: .2rem .25rem; }
+
 /* Nota imprimible */
 .nota { max-width: 800px; margin: auto; background: #fff; padding: 2rem; }
 @media print {

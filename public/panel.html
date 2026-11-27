@@ -30,10 +30,13 @@
 
     <div class="row g-3">
       <div class="col-lg-4"><div class="card"><div class="card-body">
-        <h2 class="h6">Reglas de cotización</h2>
+        <h2 class="h6">Reglas de la papelería</h2>
         <form id="form-config">
           <label class="form-label">Días de vigencia de una cotización</label>
           <input name="dias_vigencia_cotizacion" type="number" min="1" max="90" class="form-control mb-3">
+          <label class="form-label">Fondo de caja habitual</label>
+          <input name="fondo_caja_sugerido" type="number" min="0" step="50" class="form-control mb-1">
+          <div class="form-text mb-3">Se sugiere al empleado cuando abre su caja; él cuenta y confirma lo que realmente tiene.</div>
           <button class="btn btn-primary">Guardar</button>
         </form>
         <p class="form-text mt-2 mb-0">El descuento de cada cliente lo asigna el administrador en <a href="/clientes.html">Clientes</a> y se aplica solo en cada venta y cotización; nadie lo puede cambiar al capturar.</p>
@@ -49,7 +52,7 @@
   <script>
     requerirSesion(['administrador', 'soporte']);
     const $ = (id) => document.getElementById(id);
-    const tarjeta = (titulo, valor, sub, icono, href) => `<div class="col-sm-6 col-lg-3"><a href="${href}" class="text-decoration-none">
+    const tarjeta = (titulo, valor, sub, icono, href) => `<div class="col-sm-6 col-xl"><a href="${href}" class="text-decoration-none">
       <div class="card h-100"><div class="card-body"><div class="text-muted small"><i class="bi bi-${icono}"></i> ${titulo}</div>
       <div class="fs-3 fw-bold text-dark">${valor}</div><div class="small text-muted">${sub}</div></div></div></a></div>`;
 
@@ -59,7 +62,8 @@
         tarjeta('Ventas de hoy', dinero(r.hoy.importe), `${r.hoy.ventas} venta${r.hoy.ventas === 1 ? '' : 's'} · ${dinero(r.hoy.descuentos)} en descuentos`, 'cash-coin', '/ventas.html') +
         tarjeta('Ventas del mes', dinero(r.mes.importe), `${r.mes.ventas} venta${r.mes.ventas === 1 ? '' : 's'}`, 'calendar3', '/ventas.html') +
         tarjeta('Cotizaciones vigentes', r.cotizaciones_vigentes, 'pendientes de respuesta del cliente', 'file-earmark-text', '/cotizaciones.html') +
-        tarjeta('Pedidos para recoger', r.pedidos_pendientes, 'pendientes de entrega', 'bag', '/ventas.html?estado=pendiente_entrega');
+        tarjeta('Pedidos para recoger', r.pedidos_pendientes, 'pendientes de entrega', 'bag', '/ventas.html?estado=pendiente_entrega') +
+        tarjeta('Cajas abiertas', r.cajas_abiertas, 'empleados cobrando ahora', 'cash-stack', '/corte.html');
       $('bajos').innerHTML = r.bajo_minimo.map((p) => `<tr><td><code>${esc(p.codigo)}</code></td><td>${esc(p.nombre)}</td>
         <td class="text-end text-danger fw-bold">${p.existencia}</td><td class="text-end">${p.existencia_minima}</td></tr>`).join('')
         || '<tr><td colspan="4" class="text-muted">Todo en orden</td></tr>';
@@ -68,6 +72,7 @@
 
       const cfg = await API.get('/configuracion');
       $('form-config').dias_vigencia_cotizacion.value = cfg.dias_vigencia_cotizacion;
+      $('form-config').fondo_caja_sugerido.value = cfg.fondo_caja_sugerido ?? 500;
     })().catch(avisarError);
 
     $('form-config').addEventListener('submit', async (e) => {

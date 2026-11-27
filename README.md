@@ -40,7 +40,9 @@ Sistema web de punto de venta y control de inventario para papelerías de artíc
 - **Folios por papelería:** ventas, cotizaciones, compras y cortes llevan un folio consecutivo propio de cada papelería (empiezan en 1).
 - **Cobro con cambio:** en ventas en efectivo el capturista anota con cuánto pagó el cliente; el sistema calcula el cambio y lo imprime en la nota. Si el pago no alcanza, no deja registrar la venta.
 - **Kárdex:** cada entrada y salida de mercancía (existencia inicial, venta, compra, cancelación) queda registrada con la existencia resultante, el folio y el empleado.
-- **Corte de caja:** cada empleado cierra su turno contando el efectivo; el sistema lo compara con fondo inicial + ventas en efectivo del turno y registra la diferencia.
+- **Apertura de caja:** antes de vender, cada empleado abre su caja contando el efectivo con el que empieza (puede contarlo por billetes y monedas). **Sin caja abierta no se pueden registrar ventas** (las cotizaciones sí). Cada empleado tiene a lo más una caja abierta; el administrador fija el fondo habitual que se sugiere.
+- **Entradas y salidas de efectivo:** lo que entra o sale de la caja sin ser venta (pago de garrafón, retiro del encargado, reposición de fondo) se anota con su motivo. No se puede sacar más efectivo del que debería haber.
+- **Corte de caja:** cierra la caja. El empleado cuenta el efectivo y el sistema lo compara con *fondo de apertura + ventas en efectivo + entradas − salidas*; registra la diferencia, el conteo por billetes y el comprobante imprimible. El fondo sale de la apertura y no se puede cambiar al cerrar. El administrador ve qué cajas están abiertas y cuánto debería haber en cada una.
 - **Reportes:** ventas por rango de fechas agrupadas por día, empleado, forma de pago, clasificación o producto, e inventario con su valor; se descargan como archivo Excel (.xlsx) o PDF generado por el servidor. La bitácora también se exporta.
 - **Sugerencia de compra:** productos en o debajo del mínimo, agrupados por proveedor, con la cantidad para llegar al doble del mínimo; se cargan a la compra con un clic.
 - **Seguridad:** tras 5 intentos fallidos el usuario se bloquea 15 minutos (20 por IP); cada empleado puede cambiar su contraseña.
@@ -120,7 +122,7 @@ Cada push a `main` vuelve a desplegar solo.
 | Cotizaciones | `cotizaciones.html` | Todos |
 | Ventas, pedidos para recoger y solicitudes de factura | `ventas.html` | Todos (cancelar: admin) |
 | Papelerías que usan el sistema | `papelerias.html` | Soporte |
-| Corte de caja | `corte.html` | Todos (el administrador ve los de toda la papelería) |
+| Mi caja: apertura, entradas/salidas y corte | `corte.html` | Todos (el administrador ve las cajas abiertas y los cortes de toda la papelería) |
 | Reportes de ventas e inventario | `reportes.html` | Administrador |
 | Bitácora | `bitacora.html` | Administrador |
 | Clientes | `clientes.html` | Todos (descuento y baja: admin) |
@@ -151,6 +153,9 @@ Todo requiere `Authorization: Bearer <token>` excepto el login.
 | GET / POST | `/api/ventas/:id/factura` · `/api/ventas/:id/factura/timbrar` · `/api/ventas/:id/factura/pdf\|xml` | Todos |
 | POST | `/api/ventas/:id/cancelar` | Admin |
 | GET / POST | `/api/compras` | Admin |
+| GET / POST | `/api/caja` · `/api/caja/abrir` · `/api/caja/movimientos` | Todos (cada quien su caja) |
+| GET | `/api/caja/abiertas` | Admin |
+| GET / POST | `/api/cortes` | Todos (el capturista ve los suyos) |
 | GET / PUT | `/api/configuracion` | Consulta todos, cambio admin |
 | GET | `/api/resumen` | Admin |
 | GET | `/api/reportes/ventas` · `/api/reportes/inventario` · `/api/bitacora` (y `/exportar?formato=xlsx\|pdf`) | Admin |
@@ -165,13 +170,25 @@ Todo requiere `Authorization: Bearer <token>` excepto el login.
 - La fidelidad no se calcula sola: el descuento lo asigna el administrador.
 - Una sola sucursal.
 
+## Simulación de uso (datos de demostración)
+
+`npm run simular` llena la base con 30 días de operación realista de las papelerías 1, 2 y 3: catálogo de 112 productos en las 4 clasificaciones, 5 proveedores, clientes frecuentes, 2 cajeros por papelería (turno de mañana y de tarde, contraseña `Caja2026xx`), aperturas y cortes de caja, ventas con cambio, pedidos para recoger, cotizaciones (convertidas, vigentes y vencidas), solicitudes de factura, cancelaciones, salidas de efectivo y compras a proveedores. Hoy se simula hasta la hora actual, así que la caja del turno en curso queda abierta.
+
+```bash
+npm run migrar                                       # si la base ya existía
+npm run simular -- --reiniciar                       # base local (.env)
+npm run simular -- --env .env.tidb --reiniciar       # base de la nube
+```
+
+`--reiniciar` borra antes las ventas, cotizaciones, compras, cajas, kárdex y bitácora de esas papelerías (conserva productos, clientes, proveedores y usuarios). Opciones: `--dias 30`, `--papelerias 1,2`, `--semilla 2026` (misma semilla = mismos datos).
+
 ## Facturación de prueba (CFDI 4.0)
 
 1. Crea una cuenta gratuita de sandbox en https://dev.facturama.mx/api/registro
 2. Agrega `FACTURAMA_USUARIO` y `FACTURAMA_PASSWORD` en `.env` y en Vercel (Settings → Environment Variables).
 3. Descarga los CSD de prueba (https://cdnfacturama.azureedge.net/content/csd-pruebas.zip) y registra el del emisor `EKU9003173C9`:
    `npm run subir-csd -- ruta/EKU9003173C9.cer ruta/EKU9003173C9.key`
-4. Si la base ya existía, aplica la migración sin borrar datos: `npm run migrar`
+4. Si la base ya existía, aplica las migraciones sin borrar datos: `npm run migrar`
 5. En **Ventas**, abre la factura de una venta del cliente `C-PRUEBA` (RFC de prueba `URE180429TM6`), guarda la solicitud y presiona **Timbrar CFDI de prueba**. Después se descargan el XML y el PDF.
 
 ## Flujo de trabajo en equipo

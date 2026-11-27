@@ -64,7 +64,7 @@ const MENU = [
   { href: '/ventas.html', texto: 'Ventas', icono: 'receipt', roles: T },
   { href: '/clientes.html', texto: 'Clientes', icono: 'people', roles: T },
   { href: '/productos.html', texto: 'Productos', icono: 'box-seam', roles: T },
-  { href: '/corte.html', texto: 'Corte de caja', icono: 'cash-stack', roles: T },
+  { href: '/corte.html', texto: 'Mi caja', icono: 'cash-stack', roles: T },
   { href: '/panel.html', texto: 'Panel', icono: 'speedometer2', roles: A },
   { href: '/compras.html', texto: 'Compras', icono: 'truck', roles: A, grupo: true },
   { href: '/proveedores.html', texto: 'Proveedores', icono: 'building', roles: A, grupo: true },
@@ -104,6 +104,7 @@ function requerirSesion(roles) {
               ? `<select id="cambiar-papeleria" class="form-select form-select-sm me-3" style="width:200px" title="Papelería con la que trabajas">
                    <option>${esc(u.papeleria || 'Selecciona papelería')}</option></select>`
               : `<span class="navbar-text text-white me-3 papeleria-actual" title="${esc(u.papeleria || '')}"><i class="bi bi-shop"></i> ${esc(u.papeleria || '')}</span>`}
+            ${u.id_papeleria ? '<a id="estado-caja" href="/corte.html" class="btn btn-sm me-2 btn-outline-light" title="Estado de tu caja"><i class="bi bi-cash-stack"></i> Caja…</a>' : ''}
             <div class="dropdown">
               <button class="btn btn-outline-light btn-sm dropdown-toggle" data-bs-toggle="dropdown">
                 <i class="bi bi-person-circle"></i> ${esc(u.nombre)}</button>
@@ -119,8 +120,130 @@ function requerirSesion(roles) {
       </nav>`;
     if (u.rol === 'soporte') prepararCambioPapeleria(u);
     document.getElementById('menu-password').addEventListener('click', (e) => { e.preventDefault(); abrirCambioPassword(); });
+    if (u.id_papeleria) refrescarCaja().catch(() => {});
   }
   return u;
+}
+
+// ---------- Caja del empleado (apertura, estado y corte) ----------
+// Estado de la caja que comparten el menú y las pantallas. refrescarCaja() lo vuelve a pedir al servidor.
+let _caja = null;
+async function refrescarCaja() {
+  _caja = API.get('/caja');
+  const c = await _caja;
+  const b = document.getElementById('estado-caja');
+  if (b) {
+    b.className = `btn btn-sm me-2 ${c.abierta ? (c.de_otro_dia ? 'btn-warning' : 'btn-success') : 'btn-outline-warning'}`;
+    b.innerHTML = c.abierta
+      ? `<i class="bi bi-unlock"></i> Caja abierta · ${dinero(c.efectivo_esperado)}`
+      : '<i class="bi bi-lock"></i> Caja cerrada';
+    b.title = c.abierta
+      ? `Abierta desde ${fecha(c.abierto_en)}. Efectivo que debería haber: ${dinero(c.efectivo_esperado)}${c.de_otro_dia ? '. ¡Es de otro día: haz tu corte!' : ''}`
+      : 'Abre tu caja para poder registrar ventas';
+  }
+  document.dispatchEvent(new CustomEvent('caja', { detail: c }));
+  return c;
+}
+const estadoCaja = () => _caja || refrescarCaja();
+
+// Contador de efectivo: el empleado puede anotar cuántos billetes y monedas tiene de cada uno
+// (el total se calcula solo) o escribir directamente el total.
+const DENOMINACIONES = [1000, 500, 200, 100, 50, 20, 10, 5, 2, 1, 0.5];
+function contadorEfectivo(cont, { nombre = 'efectivo', alCambiar } = {}) {
+  const etiqueta = (d) => (d >= 20 ? `$${d}` : d === 0.5 ? '50¢' : `$${d}`);
+  cont.innerHTML = `
+    <div class="input-group input-group-lg mb-2">
+      <span class="input-group-text">$</span>
+      <input type="number" min="0" step="0.5" class="form-control text-end fw-bold contador-total" name="${nombre}" placeholder="0.00" required>
+    </div>
+    <button type="button" class="btn btn-link btn-sm p-0 mb-2 contador-toggle"><i class="bi bi-calculator"></i> Contar por billetes y monedas</button>
+    <div class="contador-denoms d-none">
+      <div class="row g-1">${DENOMINACIONES.map((d) => `
+        <div class="col-6 col-sm-4"><div class="input-group input-group-sm">
+          <span class="input-group-text denom ${d >= 20 ? 'billete' : 'moneda'}">${etiqueta(d)}</span>
+          <input type="number" min="0" step="1" class="form-control text-end" data-den="${d}" placeholder="0" aria-label="Piezas de ${etiqueta(d)}">
+        </div></div>`).join('')}
+      </div>
+      <p class="form-text mb-0">Escribe cuántas piezas tienes de cada uno; el total se suma solo.</p>
+    </div>`;
+  const total = cont.querySelector('.contador-total');
+  const piezas = [...cont.querySelectorAll('[data-den]')];
+  cont.querySelector('.contador-toggle').addEventListener('click', () => {
+    cont.querySelector('.contador-denoms').classList.toggle('d-none');
+    piezas[0].focus();
+  });
+  piezas.forEach((i) => i.addEventListener('input', () => {
+    const suma = piezas.reduce((s, x) => s + Number(x.dataset.den) * (parseInt(x.value, 10) || 0), 0);
+    total.value = Math.round(suma * 100) / 100;
+    alCambiar?.();
+  }));
+  // si escribe el total a mano, el desglose ya no aplica
+  total.addEventListener('input', () => { piezas.forEach((x) => { x.value = ''; }); alCambiar?.(); });
+  return {
+    input: total,
+    total: () => (total.value === '' ? null : Number(total.value)),
+    desglose: () => {
+      const d = {};
+      piezas.forEach((x) => { const n = parseInt(x.value, 10); if (n > 0) d[x.dataset.den] = n; });
+      return Object.keys(d).length ? d : undefined;
+    },
+    poner: (v) => { piezas.forEach((x) => { x.value = ''; }); total.value = v ?? ''; alCambiar?.(); },
+  };
+}
+
+// Modal de apertura de caja: se usa al entrar a la captura y desde "Mi caja"
+function abrirCaja({ obligatorio = false } = {}) {
+  return new Promise((resolve) => {
+    let el = document.getElementById('modal-abrir-caja');
+    if (el) el.remove();
+    el = document.createElement('div');
+    el.className = 'modal fade'; el.id = 'modal-abrir-caja'; el.tabIndex = -1;
+    el.innerHTML = `<div class="modal-dialog"><form class="modal-content" novalidate>
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-unlock"></i> Abrir mi caja</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <p class="mb-2">Antes de vender, <strong>cuenta el efectivo que hay en tu caja</strong> (el fondo para dar cambio).
+          Al cerrar tu turno, el corte se compara contra esta cantidad.</p>
+        <div class="alert alert-light border small py-2 mb-3 d-none sugerencia"></div>
+        <label class="form-label fw-semibold">¿Con cuánto efectivo empiezas?</label>
+        <div class="contador"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">${obligatorio ? 'Solo cotizar por ahora' : 'Cancelar'}</button>
+        <button class="btn btn-success"><i class="bi bi-unlock"></i> Abrir caja</button>
+      </div>
+    </form></div>`;
+    document.body.appendChild(el);
+    const contador = contadorEfectivo(el.querySelector('.contador'), { nombre: 'fondo_inicial' });
+    const modal = new bootstrap.Modal(el, { backdrop: obligatorio ? 'static' : true });
+    let abierta = null;
+    estadoCaja().then((c) => {
+      if (c.abierta) return;
+      const s = el.querySelector('.sugerencia');
+      s.innerHTML = `<i class="bi bi-lightbulb"></i> El fondo de caja habitual es <strong>${dinero(c.fondo_sugerido)}</strong>
+        <button type="button" class="btn btn-sm btn-outline-primary ms-2 py-0">Usar ${dinero(c.fondo_sugerido)}</button>
+        ${c.ultimo_corte ? `<br>Tu último corte (${fecha(c.ultimo_corte.hasta)}) cerró con ${dinero(c.ultimo_corte.efectivo_contado)} contados.` : ''}`;
+      s.classList.remove('d-none');
+      s.querySelector('button').addEventListener('click', () => contador.poner(c.fondo_sugerido));
+    }).catch(() => {});
+    el.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (contador.total() === null) { contador.input.focus(); return avisar('Escribe con cuánto efectivo empiezas (puede ser 0)', 'warning'); }
+      try {
+        const r = await API.post('/caja/abrir', { fondo_inicial: contador.total(), desglose: contador.desglose() });
+        avisar(r.mensaje);
+        abierta = r.caja;
+        modal.hide();
+      } catch (err) { avisarError(err); }
+    });
+    el.addEventListener('shown.bs.modal', () => contador.input.focus());
+    el.addEventListener('hidden.bs.modal', async () => {
+      el.remove();
+      if (abierta) await refrescarCaja().catch(() => {});
+      resolve(abierta);
+    });
+    modal.show();
+  });
 }
 
 // Cada empleado puede cambiar su propia contraseña desde el menú de su nombre
