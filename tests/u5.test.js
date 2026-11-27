@@ -85,7 +85,7 @@ test.before(async () => {
 test.after(async () => { server.close(); pacFalso.close(); await pool.end(); });
 
 const vender = async (cliente) => (await api('caj', 'POST', '/ventas', {
-  id_cliente: cliente, porcentaje_descuento: 7, metodo_pago: 'tarjeta',
+  id_cliente: cliente, metodo_pago: 'tarjeta',
   partidas: [{ id_producto: prod, cantidad: 3 }, { id_producto: prod2, cantidad: 2 }] })).data.venta;
 const datosFiscales = { rfc: 'URE180429TM6', razon_social: 'Universidad Robotica Española', regimen_fiscal: '601', codigo_postal: '86991', uso_cfdi: 'G03' };
 
@@ -179,4 +179,52 @@ test('reportes de ventas, inventario y bitácora en PDF', async () => {
   assert.equal(inv.resumen.por_reabastecer, 1); // la pluma quedó abajo del mínimo
   assert.equal((await api('adm', 'GET', '/reportes/ventas/exportar?formato=doc')).status, 400);
   assert.equal((await api('caj', 'GET', '/reportes/inventario/exportar?formato=pdf')).status, 403);
+});
+
+test('reporte de ventas por categoría: cada categoría con sus productos, subtotal y filtros', async () => {
+  const q = 'desde=2026-01-01&hasta=2099-12-31';
+  const r = (await api('adm', 'GET', `/reportes/ventas?agrupar=categoria&${q}`)).data;
+  assert.equal(r.agrupar, 'categoria');
+  assert.ok(r.categorias.length >= 1);
+  for (const c of r.categorias) {
+    const suma = c.productos.reduce((s, p) => s + Number(p.total), 0);
+    assert.ok(Math.abs(suma - Number(c.total)) < 0.02, `subtotal de ${c.categoria}`);
+    assert.equal(c.productos.reduce((s, p) => s + Number(p.piezas), 0), Number(c.piezas));
+  }
+  const totalCats = r.categorias.reduce((s, c) => s + Number(c.total), 0);
+  assert.ok(Math.abs(totalCats - Number(r.resumen.total)) < 0.02);
+  // Filtros: categoría, empleado y forma de pago
+  const op = (await api('adm', 'GET', '/reportes/opciones')).data;
+  const cat = op.categorias.find((c) => c.nombre === r.categorias[0].categoria);
+  const soloCat = (await api('adm', 'GET', `/reportes/ventas?agrupar=categoria&categoria=${cat.id}&${q}`)).data;
+  assert.equal(soloCat.categorias.length, 1);
+  assert.match(soloCat.filtros.join(), /categoría/);
+  const caj = op.empleados.find((e) => e.rol === 'capturista');
+  const porEmpleado = (await api('adm', 'GET', `/reportes/ventas?agrupar=dia&empleado=${caj.id}&${q}`)).data;
+  assert.ok(Number(porEmpleado.resumen.ventas) >= 1);
+  const tarjeta = (await api('adm', 'GET', `/reportes/ventas?agrupar=dia&metodo=transferencia&${q}`)).data;
+  assert.equal(Number(tarjeta.resumen.ventas), 0);
+  assert.equal((await api('adm', 'GET', `/reportes/ventas?metodo=cheque&${q}`)).status, 400);
+  // Excel: subtotales por categoría como fórmula y total como suma de subtotales
+  const x = await api('adm', 'GET', `/reportes/ventas/exportar?formato=xlsx&agrupar=categoria&${q}`);
+  const libro = new ExcelJS.Workbook();
+  await libro.xlsx.load(x.data);
+  const formulas = [];
+  libro.getWorksheet('Ventas').eachRow((fila) => fila.eachCell((c) => { if (c.formula) formulas.push(c.formula); }));
+  assert.ok(formulas.some((f) => /^SUM\(D\d+:D\d+\)$/.test(f)), 'subtotal por categoría');
+  assert.ok(formulas.some((f) => /^SUM\(D\d+(,D\d+)*\)$/.test(f) && !f.includes(':')), 'total de subtotales');
+  const pdf = await api('adm', 'GET', `/reportes/ventas/exportar?formato=pdf&agrupar=categoria&${q}`);
+  assert.equal(pdf.data.subarray(0, 4).toString(), '%PDF');
+});
+
+test('inventario dividido por categoría con subtotales y filtro de reabastecer', async () => {
+  const inv = (await api('adm', 'GET', '/reportes/inventario')).data;
+  assert.ok(inv.categorias.length >= 1);
+  for (const c of inv.categorias) {
+    assert.equal(c.existencia, c.lista.reduce((s, p) => s + Number(p.existencia), 0));
+  }
+  const bajos = (await api('adm', 'GET', '/reportes/inventario?reabastecer=1')).data;
+  assert.ok(bajos.filas.every((p) => p.alerta === 'Reabastecer'));
+  const x = await api('adm', 'GET', '/reportes/inventario/exportar?formato=xlsx&reabastecer=1');
+  assert.equal(x.status, 200);
 });

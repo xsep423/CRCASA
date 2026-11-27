@@ -102,14 +102,17 @@ test('cotización: se aplica el descuento del cliente y NO mueve existencia', as
   assert.equal((await api('capturista', 'PUT', `/cotizaciones/${c.id_cotizacion}`, { partidas: [{ id_producto: prodA, cantidad: 1 }] })).status, 409);
 });
 
-test('venta directa: el capturista ajusta el descuento hasta el tope', async () => {
-  const pedir = (pct) => api('capturista', 'POST', '/ventas', {
-    id_cliente: cliente.id_cliente, porcentaje_descuento: pct, partidas: [{ id_producto: prodB, cantidad: 2 }],
+test('venta directa: el descuento es el del cliente y nadie lo puede cambiar al capturar', async () => {
+  const pedir = (quien, pct) => api(quien, 'POST', '/ventas', {
+    id_cliente: cliente.id_cliente, ...(pct !== undefined ? { porcentaje_descuento: pct } : {}), partidas: [{ id_producto: prodB, cantidad: 2 }],
   });
-  assert.equal((await pedir(40)).status, 400);           // pasa del tope (15%)
-  const r = await pedir(0);                               // decide no dar descuento
+  assert.equal((await pedir('capturista', 0)).status, 400);       // intenta quitarlo
+  assert.equal((await pedir('capturista', 40)).status, 400);      // intenta subirlo
+  assert.equal((await pedir('administrador', 15)).status, 400);   // tampoco el administrador en la venta
+  const r = await pedir('capturista');                              // sin enviarlo: se aplica el 10 % del cliente
   assert.equal(r.status, 201);
-  assert.equal(Number(r.data.venta.total), 100);
+  assert.equal(Number(r.data.venta.porcentaje_descuento), 10);
+  assert.equal(Number(r.data.venta.total), 90);
   assert.equal(await existencia(prodB), 8);
 });
 
@@ -179,7 +182,7 @@ test('cada papelería solo ve y opera sus propios datos', async () => {
 
   // la papelería nueva arranca con su cliente PG, sus reglas y sus clasificaciones, sin productos de las demás
   assert.equal((await api('otra', 'GET', '/clientes/codigo/PG')).status, 200);
-  assert.equal((await api('otra', 'GET', '/configuracion')).data.tope_descuento, 15);
+  assert.equal((await api('otra', 'GET', '/configuracion')).data.dias_vigencia_cotizacion, 15);
   assert.equal((await api('otra', 'GET', '/clasificaciones')).data.length, 4);
   assert.equal((await api('otra', 'GET', `/productos/codigo/TA-${sufijo}`)).status, 404);
   assert.equal((await api('otra', 'GET', `/productos/${prodA}`)).status, 404);
