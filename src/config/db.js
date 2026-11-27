@@ -14,7 +14,39 @@ const pool = mysql.createPool({
   ssl: process.env.DB_SSL === 'true' ? { minVersion: 'TLSv1.2', rejectUnauthorized: true } : undefined,
   decimalNumbers: true, // DECIMAL llega como número y no como texto
   dateStrings: true,
+  connectTimeout: 4000,
+  enableKeepAlive: true,
+  // En Vercel la función se congela entre peticiones: las conexiones inactivas se cierran pronto
+  // para no reutilizar una que la base ya cortó.
+  maxIdle: 1,
+  idleTimeout: 30000,
 });
+
+// Errores de red pasajeros (la base en la nube tardó en responder o cortó la conexión).
+// Se reintenta la operación en lugar de mostrar "Error en el servidor".
+const PASAJEROS = new Set(['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EPIPE', 'PROTOCOL_CONNECTION_LOST', 'PROTOCOL_SEQUENCE_TIMEOUT']);
+const esPasajero = (err) => PASAJEROS.has(err && err.code);
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function conReintentos(fn, intentos = 3) {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (!esPasajero(err) || i >= intentos) throw err;
+      console.warn(`Conexión con la base falló (${err.code}); reintento ${i} de ${intentos - 1}`);
+      await esperar(400 * i);
+    }
+  }
+}
+
+// query y getConnection reintentan solos ante un error de red pasajero.
+// (query no se repite si el error llegó a la mitad de una transacción: esas usan getConnection)
+const queryOriginal = pool.query.bind(pool);
+const getConnectionOriginal = pool.getConnection.bind(pool);
+pool.query = (...args) => conReintentos(() => queryOriginal(...args));
+pool.getConnection = () => conReintentos(() => getConnectionOriginal());
+pool.esPasajero = esPasajero;
 
 // Las bases en la nube trabajan en UTC: se fija la zona horaria para que "ventas de hoy"
 // y las fechas de vigencia correspondan a la hora local de las papelerías.

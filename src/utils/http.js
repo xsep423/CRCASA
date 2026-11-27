@@ -28,6 +28,9 @@ function manejadorErrores(err, req, res, next) { // eslint-disable-line no-unuse
     return res.status(409).json({ error: 'No se puede eliminar: hay registros relacionados' });
   }
   console.error(err);
+  if (['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EPIPE', 'PROTOCOL_CONNECTION_LOST'].includes(err.code)) {
+    return res.status(503).json({ error: 'No se pudo conectar con la base de datos. Espera unos segundos e intenta de nuevo.' });
+  }
   res.status(500).json({ error: 'Error en el servidor' });
 }
 
